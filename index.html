@@ -1,0 +1,1743 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0C1019">
+<meta name="description" content="Play chess against bots while a coach pauses on your mistakes and gives less help as your rank rises.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Dee Chess</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: one narrow column like a phone app; the board is the hero, everything else stays quiet until the coach speaks. */
+:root {
+  /* "Midnight study": a deep quiet room, one warm light on the board. Single deliberate dark look. */
+  --ink: #0C1019;
+  --ink-raised: #141A28;
+  --slate: #1D2538;
+  --line: #2A3350;
+  --text: #F2EEE6;
+  --quiet: #9AA3B8;
+  --gold: #E8B954;
+  --gold-deep: #B8862B;
+  --coral: #FF6B5E;
+  --amber: #FFB547;
+  --mint: #4FD8A4;
+  --sq-light: #E9D7B7;
+  --sq-dark: #9C7451;
+  --hl-last: rgba(232, 185, 84, 0.42);
+  --hl-sel: rgba(79, 216, 164, 0.45);
+  --font-display: "Fraunces", "Georgia", "Times New Roman", serif;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--ink);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.45;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
+button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.app {
+  max-width: 520px;
+  margin: 0 auto;
+  height: 100%;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.screen { height: 100%; display: flex; flex-direction: column; }
+.scroll { overflow-y: auto; padding-block: 14px 32px; display: flex; flex-direction: column; gap: 16px; }
+h1, h2, h3 { font-family: var(--font-display); font-weight: 600; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+.eyebrow { font-size: 11.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--quiet); font-weight: 600; }
+.muted { color: var(--quiet); }
+.tabnum { font-variant-numeric: tabular-nums; }
+
+/* Header */
+.topline { display: flex; align-items: center; gap: 12px; }
+.wordmark { font-family: var(--font-display); font-size: 27px; font-weight: 600; }
+.wordmark b { color: var(--gold); font-weight: 700; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 99px; background: var(--slate); font-weight: 600; font-size: 13.5px; }
+.spacer { flex: 1; }
+
+/* Cards */
+.card { background: var(--ink-raised); border: 1px solid var(--line); border-radius: 20px; padding: 18px; }
+.rank-card { display: flex; gap: 18px; align-items: center; padding: 22px; border-color: rgba(232, 185, 84, 0.35); box-shadow: 0 0 40px -8px rgba(232, 185, 84, 0.22); }
+.rank-card h2 { font-size: 31px; color: var(--gold); }
+.rank-meta { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.rank-rating { font-size: 17px; font-weight: 600; }
+.ladder { display: flex; gap: 6px; margin-top: 8px; }
+.ladder span { width: 22px; height: 22px; border-radius: 7px; background: var(--slate); display: grid; place-items: center; opacity: 0.45; }
+.ladder span.on { opacity: 1; background: rgba(232, 185, 84, 0.16); }
+.ladder svg { width: 18px; height: 18px; }
+.coach-style { display: flex; gap: 14px; align-items: flex-start; }
+.sage-mark { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: rgba(232, 185, 84, 0.12); border: 1px solid rgba(232, 185, 84, 0.5); color: var(--gold); font-size: 16px; }
+.coach-style b { display: block; font-size: 15.5px; margin-bottom: 2px; }
+
+.btn { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 56px; border-radius: 18px; font-weight: 700; font-size: 17px; width: 100%; transition: transform 0.12s ease, filter 0.12s ease; }
+.btn:active { transform: scale(0.98); }
+.btn-gold { background: linear-gradient(180deg, #F0C766, var(--gold)); color: #1B1408; box-shadow: 0 8px 28px -10px rgba(232, 185, 84, 0.7); }
+.btn-line { border: 1px solid var(--line); background: transparent; color: var(--text); min-height: 50px; font-size: 16px; font-weight: 600; }
+.btn-mint { border: 1px solid rgba(79, 216, 164, 0.6); color: var(--mint); min-height: 48px; font-size: 15.5px; font-weight: 600; }
+.btn-small { min-height: 48px; font-size: 15.5px; }
+
+.section-title { font-family: var(--font-display); font-size: 20px; margin-top: 4px; }
+.game-row { display: flex; align-items: center; gap: 12px; padding: 13px 16px; border-radius: 16px; background: var(--ink-raised); border: 1px solid var(--line); }
+.game-row .res { font-weight: 700; width: 42px; }
+.game-row .who { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.empty-note { padding: 16px; border-radius: 16px; border: 1px dashed var(--line); color: var(--quiet); text-align: center; }
+
+/* Opponents */
+.bar { display: flex; align-items: center; gap: 4px; padding-block: 8px; }
+.icon-btn { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; font-size: 20px; }
+.icon-btn:hover { background: var(--slate); }
+.seg { display: grid; grid-template-columns: 1fr 1fr; background: var(--slate); padding: 4px; border-radius: 14px; gap: 4px; }
+.seg button { padding: 10px; border-radius: 11px; font-weight: 600; color: var(--quiet); }
+.seg button[aria-pressed="true"] { background: var(--ink-raised); color: var(--text); box-shadow: 0 1px 0 var(--line); }
+.bot { display: flex; align-items: center; gap: 14px; padding: 16px; border-radius: 20px; background: var(--ink-raised); border: 1px solid var(--line); text-align: left; width: 100%; transition: border-color 0.15s ease, transform 0.12s ease; }
+.bot:active { transform: scale(0.99); }
+.bot.match { border-color: rgba(232, 185, 84, 0.45); box-shadow: 0 0 32px -10px rgba(232, 185, 84, 0.35); }
+.bot .av { width: 54px; height: 54px; border-radius: 16px; background: var(--slate); display: grid; place-items: center; font-family: var(--font-display); font-size: 24px; font-weight: 700; color: var(--gold); flex: none; }
+.bot .nm { font-family: var(--font-display); font-size: 20px; font-weight: 600; }
+.bot .rt { font-weight: 700; color: var(--gold); font-size: 18px; }
+.bot .info { flex: 1; min-width: 0; }
+.tag-match { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold); font-weight: 700; }
+
+/* Game */
+.game-screen { gap: 6px; padding-bottom: 8px; }
+.gbar { display: flex; align-items: center; gap: 4px; padding-top: 4px; }
+.gbar .lbl { color: var(--quiet); font-size: 13.5px; }
+.gbar .txt-btn { display: inline-flex; align-items: center; gap: 6px; color: var(--quiet); padding: 8px 10px; border-radius: 10px; font-size: 14px; }
+.gbar .txt-btn:hover { background: var(--slate); }
+.player { display: flex; align-items: center; gap: 12px; padding: 4px 2px; }
+.player .av { width: 38px; height: 38px; border-radius: 11px; background: var(--slate); display: grid; place-items: center; font-family: var(--font-display); font-weight: 700; color: var(--gold); flex: none; }
+.player .av svg { width: 30px; height: 30px; }
+.player .nm { font-weight: 700; }
+.player .sub { color: var(--quiet); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.player .meta { flex: 1; min-width: 0; }
+.captured { display: flex; align-items: center; min-height: 18px; }
+.captured svg { width: 18px; height: 18px; margin-right: -5px; }
+.captured .adv { margin-left: 9px; font-size: 12px; color: var(--quiet); font-weight: 600; }
+.thinking { display: flex; align-items: center; gap: 8px; color: var(--quiet); font-size: 12.5px; opacity: 0; transition: opacity 0.2s ease; }
+.thinking.on { opacity: 1; }
+.dots i { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: var(--gold); margin-right: 3px; animation: blink 1s infinite ease-in-out; }
+.dots i:nth-child(2) { animation-delay: 0.15s; }
+.dots i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes blink { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }
+
+.board-wrap { position: relative; width: min(100%, 58dvh, 520px); margin: 0 auto; aspect-ratio: 1; max-width: 100%; border-radius: 12px; box-shadow: 0 18px 50px -16px rgba(0, 0, 0, 0.7), 0 0 44px -14px rgba(232, 185, 84, 0.18); transition: box-shadow 0.3s ease; }
+.board-wrap.paused { box-shadow: 0 18px 50px -16px rgba(0, 0, 0, 0.7), 0 0 50px -10px rgba(255, 107, 94, 0.32); }
+.board { position: absolute; inset: 0; border-radius: 12px; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
+.layer { position: absolute; inset: 0; }
+.squares { display: grid; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(8, 1fr); transition: filter 0.35s ease; }
+.sq { position: relative; }
+.sq.l { background: var(--sq-light); }
+.sq.d { background: var(--sq-dark); }
+.coord { position: absolute; font-size: 10px; font-weight: 700; line-height: 1; pointer-events: none; }
+.sq.l .coord { color: var(--sq-dark); }
+.sq.d .coord { color: var(--sq-light); }
+.coord.rk { top: 3px; left: 3px; }
+.coord.fl { bottom: 3px; right: 4px; }
+.hl { position: absolute; width: 12.5%; height: 12.5%; pointer-events: none; }
+.hl.last { background: var(--hl-last); }
+.hl.sel { background: var(--hl-sel); }
+.hl.check { background: radial-gradient(circle, rgba(255, 70, 60, 0.95) 0%, rgba(255, 70, 60, 0.55) 35%, rgba(255, 70, 60, 0) 72%); }
+.hl.dot::after { content: ""; position: absolute; left: 50%; top: 50%; width: 30%; height: 30%; transform: translate(-50%, -50%); border-radius: 50%; background: rgba(20, 26, 40, 0.32); }
+.hl.cap::after { content: ""; position: absolute; inset: 4%; border-radius: 50%; border: 0.55vmin solid rgba(20, 26, 40, 0.34); border-width: max(3px, 0.6vmin); }
+.pieces { transition: filter 0.35s ease; }
+.pc { position: absolute; width: 12.5%; height: 12.5%; left: 0; top: 0; will-change: transform; pointer-events: none; }
+.pc svg { width: 100%; height: 100%; display: block; filter: drop-shadow(0 2px 1.5px rgba(0, 0, 0, 0.28)); }
+.pc.anim { transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.3, 1); }
+.pc.fade-in { animation: pcIn 0.18s ease both; }
+@keyframes pcIn { from { opacity: 0; } to { opacity: 1; } }
+.pc.drag { z-index: 5; transition: none; }
+.pc.drag svg { transform: scale(1.25); transform-origin: 50% 70%; filter: drop-shadow(0 8px 6px rgba(0, 0, 0, 0.35)); }
+.board.dim .squares, .board.dim .pieces, .board.dim .hls { filter: brightness(0.6) saturate(0.85); }
+.hls { transition: filter 0.35s ease; }
+.overlay { pointer-events: none; overflow: visible; }
+.overlay .arrow { animation: draw 0.45s ease-out both; }
+@keyframes draw { from { stroke-dashoffset: 8; opacity: 0.2; } to { stroke-dashoffset: 0; opacity: 1; } }
+.overlay .ring { animation: pulse 1.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes pulse { 0%, 100% { opacity: 0.95; } 50% { opacity: 0.45; } }
+
+.promo { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(12, 16, 25, 0.55); z-index: 8; border-radius: 12px; }
+.promo .row { display: flex; gap: 8px; padding: 10px; background: var(--ink-raised); border: 1px solid var(--line); border-radius: 18px; }
+.promo button { width: 62px; height: 62px; border-radius: 12px; background: var(--slate); }
+.promo button svg { width: 100%; height: 100%; }
+
+.moves { display: flex; gap: 14px; overflow-x: auto; white-space: nowrap; padding: 4px 2px; scrollbar-width: none; font-size: 14px; font-weight: 500; min-height: 30px; }
+.moves::-webkit-scrollbar { display: none; }
+.moves .n { color: var(--quiet); }
+.moves .flag { color: var(--coral); font-weight: 700; }
+
+.dock { flex: 1; min-height: 140px; display: flex; flex-direction: column; justify-content: flex-start; }
+.status { margin: auto 0; text-align: center; color: var(--quiet); font-size: 15px; }
+.coach { background: var(--ink-raised); border: 1px solid rgba(255, 107, 94, 0.42); border-radius: 22px; padding: 16px 18px 14px; box-shadow: 0 0 34px -10px rgba(255, 107, 94, 0.35); animation: rise 0.38s cubic-bezier(0.2, 0.9, 0.25, 1.15) both; display: flex; flex-direction: column; gap: 9px; }
+@keyframes rise { from { transform: translateY(26px); opacity: 0; } to { transform: none; opacity: 1; } }
+.coach .who { display: flex; align-items: center; gap: 6px; color: var(--gold); font-family: var(--font-display); font-weight: 600; font-size: 15px; }
+.cline { display: flex; gap: 10px; align-items: flex-start; font-size: 15.5px; line-height: 1.42; }
+.cline .ic { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 800; margin-top: 1px; }
+.cline.wrong { font-weight: 700; }
+.cline.wrong .ic { background: rgba(255, 107, 94, 0.16); color: var(--coral); }
+.cline.why .ic { background: rgba(255, 181, 71, 0.16); color: var(--amber); }
+.cline.better .ic { background: rgba(79, 216, 164, 0.16); color: var(--mint); }
+.coach .actions { display: flex; gap: 10px; margin-top: 4px; }
+.coach.quiz { border-color: rgba(232, 185, 84, 0.5); box-shadow: 0 0 34px -10px rgba(232, 185, 84, 0.35); }
+.cline.ask .ic { background: rgba(232, 185, 84, 0.16); color: var(--gold); }
+.note { margin: 6px 0 0; padding: 12px 14px; border-radius: 16px; font-size: 14.5px; line-height: 1.4; }
+.note.good { background: rgba(79, 216, 164, 0.1); border: 1px solid rgba(79, 216, 164, 0.35); }
+.note.bad { background: rgba(232, 185, 84, 0.08); border: 1px solid rgba(232, 185, 84, 0.35); }
+.board.tapmode { cursor: pointer; }
+.board.tapmode .squares .sq:hover { box-shadow: inset 0 0 0 3px rgba(232, 185, 84, 0.7); }
+
+/* Home extras */
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.stat { background: var(--ink-raised); border: 1px solid var(--line); border-radius: 16px; padding: 12px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.stat b { font-size: 20px; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 12px; color: var(--quiet); line-height: 1.3; }
+.puz-card { display: flex; align-items: center; gap: 14px; }
+.puz-card .count { flex: none; width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center; font-family: var(--font-display); font-size: 24px; font-weight: 700; background: rgba(79, 216, 164, 0.12); color: var(--mint); border: 1px solid rgba(79, 216, 164, 0.4); }
+.puz-card .count.zero { background: var(--slate); color: var(--quiet); border-color: var(--line); }
+.puz-card .txt { flex: 1; min-width: 0; }
+.puz-card .txt b { display: block; font-size: 15.5px; }
+.puz-card .go { flex: none; padding: 10px 16px; border-radius: 12px; font-weight: 700; background: var(--mint); color: #08241A; }
+.puz-card .go.ghost { background: transparent; color: var(--mint); border: 1px solid rgba(79, 216, 164, 0.5); }
+
+/* Puzzle screen */
+.puz-head { display: flex; flex-direction: column; gap: 2px; padding-block: 2px 6px; }
+.puz-head h2 { font-size: 22px; }
+.puz-dock { flex: 1; min-height: 130px; display: flex; flex-direction: column; gap: 10px; padding-top: 8px; }
+.verdict { padding: 14px 16px; border-radius: 18px; font-size: 15.5px; line-height: 1.42; display: flex; flex-direction: column; gap: 10px; }
+.verdict.good { background: rgba(79, 216, 164, 0.1); border: 1px solid rgba(79, 216, 164, 0.4); }
+.verdict.bad { background: rgba(255, 107, 94, 0.08); border: 1px solid rgba(255, 107, 94, 0.4); }
+.verdict.info { background: var(--ink-raised); border: 1px solid var(--line); }
+.verdict .row { display: flex; gap: 10px; }
+.verdict .row > * { flex: 1; }
+.coach .actions > * { flex: 1; }
+
+/* Overlays */
+.scrim { position: fixed; inset: 0; background: rgba(5, 7, 12, 0.62); z-index: 40; display: flex; align-items: flex-end; justify-content: center; animation: fadeIn 0.2s ease both; }
+.scrim.center { align-items: center; padding: 20px; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.sheet { width: 100%; max-width: 520px; background: var(--ink-raised); border-radius: 28px 28px 0 0; border: 1px solid var(--line); border-bottom: 0; padding: 26px max(22px, env(safe-area-inset-right, 0px)) calc(20px + env(safe-area-inset-bottom, 0px)) max(22px, env(safe-area-inset-left, 0px)); display: flex; flex-direction: column; gap: 12px; animation: sheetUp 0.35s cubic-bezier(0.2, 0.9, 0.25, 1) both; text-align: center; }
+@keyframes sheetUp { from { transform: translateY(100%); } to { transform: none; } }
+.sheet h2 { font-size: 29px; }
+.sheet .delta { font-size: 23px; font-weight: 700; }
+.dialog { width: 100%; max-width: 380px; background: var(--ink-raised); border: 1px solid var(--line); border-radius: 22px; padding: 22px; display: flex; flex-direction: column; gap: 12px; }
+.dialog h3 { font-size: 22px; }
+.dialog .row { display: flex; gap: 10px; margin-top: 6px; }
+.dialog .row > * { flex: 1; }
+.btn-danger { border: 1px solid rgba(255, 107, 94, 0.55); color: var(--coral); min-height: 48px; font-weight: 600; }
+
+.rankup { position: fixed; inset: 0; z-index: 60; background: radial-gradient(circle at 50% 38%, rgba(232, 185, 84, 0.22), var(--ink) 62%); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 28px max(24px, env(safe-area-inset-right, 0px)) calc(28px + env(safe-area-inset-bottom, 0px)) max(24px, env(safe-area-inset-left, 0px)); gap: 14px; }
+.rankup canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.morph { position: relative; width: 180px; height: 180px; }
+.morph > * { position: absolute; inset: 0; transition: opacity 0.9s ease, transform 0.9s cubic-bezier(0.3, 0.8, 0.3, 1); }
+.morph .from { opacity: 1; transform: scale(1); }
+.morph .to { opacity: 0; transform: scale(0.65); }
+.morph.go .from { opacity: 0; transform: scale(0.7); }
+.morph.go .to { opacity: 1; transform: scale(1); }
+.rankup .new { opacity: 0; transform: translateY(18px); transition: all 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.2) 0.9s; display: flex; flex-direction: column; gap: 10px; align-items: center; max-width: 34ch; }
+.rankup.show .new { opacity: 1; transform: none; }
+.rankup .new h2 { font-size: 50px; color: var(--gold); }
+.rankup .cont { width: min(100%, 360px); opacity: 0; transition: opacity 0.5s ease 2s; margin-top: 20px; }
+.rankup.show .cont { opacity: 1; }
+
+.loading { margin: auto; display: flex; flex-direction: column; align-items: center; gap: 14px; color: var(--quiet); text-align: center; max-width: 30ch; }
+.spinner { width: 34px; height: 34px; border-radius: 50%; border: 3px solid var(--slate); border-top-color: var(--gold); animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--slate); border: 1px solid var(--line); padding: 10px 16px; border-radius: 12px; z-index: 70; font-size: 14px; max-width: calc(100% - 32px); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="goldg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F7D886"/>
+      <stop offset="0.55" stop-color="#E8B954"/>
+      <stop offset="1" stop-color="#B8862B"/>
+    </linearGradient>
+    <marker id="ah-coral" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="3.2" markerHeight="3.2" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#FF6B5E"/></marker>
+    <marker id="ah-mint" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="3.2" markerHeight="3.2" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#4FD8A4"/></marker>
+    <symbol id="p-wk" viewBox="-2 -1668 1840 1840"><g transform="scale(1,-1)"><path d="M848 967Q849 970 851 973Q816 1016 765 1044Q691 1085 613 1085Q535 1085 462 1044Q388 1004 346 930Q304 855 304 775Q304 694 345 621Q386 548 460 508Q482 494 505 486H848ZM989 486H1331Q1355 494 1377 508Q1451 548 1492 621Q1532 694 1532 775Q1532 855 1490 930Q1449 1004 1376 1044Q1302 1085 1223 1085Q1146 1085 1072 1044Q1020 1016 986 973Q988 970 989 967ZM540 383V80H1297V383ZM458 0V383Q416 396 378 418Q309 472 255 570Q201 668 201 775Q201 883 256 982Q311 1080 410 1133Q509 1186 613 1186Q693 1186 769 1155V1157Q769 1193 787 1224Q805 1256 837 1274Q850 1281 866 1285V1339H758V1409H866V1496H971V1409H1079V1339H971V1285Q987 1281 1000 1274Q1031 1256 1050 1224Q1068 1193 1068 1157V1155Q1144 1186 1223 1186Q1327 1186 1426 1133Q1525 1080 1580 982Q1635 883 1635 775Q1635 668 1581 570Q1527 472 1459 418Q1420 396 1379 383V0ZM825 1149Q825 1124 838 1102Q850 1081 872 1068Q895 1056 918 1056Q942 1056 964 1068Q987 1081 999 1102Q1011 1124 1011 1149Q1011 1173 999 1196Q987 1218 964 1230Q942 1241 918 1241Q895 1241 872 1230Q850 1218 838 1196Q825 1173 825 1149ZM1245 331V131H592V331ZM798 537H518Q500 544 483 556Q422 589 389 650Q356 710 356 777Q356 843 390 904Q424 966 484 1000Q543 1033 607 1033Q669 1033 730 1000Q771 977 800 941Q798 938 798 936ZM1039 936Q1039 938 1037 941Q1066 977 1107 1000Q1168 1033 1229 1033Q1294 1033 1354 1000Q1413 966 1447 904Q1481 843 1481 777Q1481 710 1448 650Q1415 589 1354 556Q1336 544 1318 537H1039Z" fill="#FBF6EC" stroke="#1A1612" stroke-width="22" stroke-linejoin="round"/><path d="M848 967Q849 970 851 973Q816 1016 765 1044Q691 1085 613 1085Q535 1085 462 1044Q388 1004 346 930Q304 855 304 775Q304 694 345 621Q386 548 460 508Q482 494 505 486H848ZM989 486H1331Q1355 494 1377 508Q1451 548 1492 621Q1532 694 1532 775Q1532 855 1490 930Q1449 1004 1376 1044Q1302 1085 1223 1085Q1146 1085 1072 1044Q1020 1016 986 973Q988 970 989 967ZM540 383V80H1297V383ZM458 0V383Q416 396 378 418Q309 472 255 570Q201 668 201 775Q201 883 256 982Q311 1080 410 1133Q509 1186 613 1186Q693 1186 769 1155V1157Q769 1193 787 1224Q805 1256 837 1274Q850 1281 866 1285V1339H758V1409H866V1496H971V1409H1079V1339H971V1285Q987 1281 1000 1274Q1031 1256 1050 1224Q1068 1193 1068 1157V1155Q1144 1186 1223 1186Q1327 1186 1426 1133Q1525 1080 1580 982Q1635 883 1635 775Q1635 668 1581 570Q1527 472 1459 418Q1420 396 1379 383V0ZM825 1149Q825 1124 838 1102Q850 1081 872 1068Q895 1056 918 1056Q942 1056 964 1068Q987 1081 999 1102Q1011 1124 1011 1149Q1011 1173 999 1196Q987 1218 964 1230Q942 1241 918 1241Q895 1241 872 1230Q850 1218 838 1196Q825 1173 825 1149Z" fill="#1A1612"/></g></symbol><symbol id="p-wq" viewBox="-2 -1668 1840 1840"><g transform="scale(1,-1)"><path d="M333 1019Q238 1021 226 1116Q226 1144 240 1170Q255 1195 282 1209Q309 1223 338 1223Q366 1223 393 1209Q420 1195 434 1170Q448 1144 448 1116Q444 1052 387 1030L626 524L574 1226Q491 1226 473 1319Q473 1347 488 1372Q502 1397 528 1411Q555 1425 586 1425Q614 1425 640 1411Q667 1397 682 1372Q696 1347 696 1319Q694 1274 648 1240L837 492L880 1312Q813 1342 811 1390Q811 1418 826 1444Q841 1470 868 1483Q894 1496 921 1496Q950 1496 976 1483Q1003 1470 1018 1444Q1033 1418 1033 1390Q1030 1336 963 1312L1001 490L1186 1230Q1140 1277 1140 1319Q1140 1346 1154 1372Q1169 1397 1196 1411Q1223 1425 1250 1425Q1280 1425 1307 1411Q1334 1397 1348 1372Q1363 1346 1363 1319Q1352 1234 1266 1218L1174 524L1431 1039Q1388 1073 1388 1116Q1388 1144 1402 1170Q1417 1195 1444 1208Q1470 1222 1498 1222Q1528 1222 1554 1208Q1581 1195 1596 1170Q1610 1144 1610 1116Q1597 1022 1498 1022L1338 559V0H477V559ZM1281 356V434H554V356ZM1281 58V137H554V58Z" fill="#FBF6EC" stroke="#1A1612" stroke-width="22" stroke-linejoin="round"/><path d="M333 1019Q238 1021 226 1116Q226 1144 240 1170Q255 1195 282 1209Q309 1223 338 1223Q366 1223 393 1209Q420 1195 434 1170Q448 1144 448 1116Q444 1052 387 1030L626 524L574 1226Q491 1226 473 1319Q473 1347 488 1372Q502 1397 528 1411Q555 1425 586 1425Q614 1425 640 1411Q667 1397 682 1372Q696 1347 696 1319Q694 1274 648 1240L837 492L880 1312Q813 1342 811 1390Q811 1418 826 1444Q841 1470 868 1483Q894 1496 921 1496Q950 1496 976 1483Q1003 1470 1018 1444Q1033 1418 1033 1390Q1030 1336 963 1312L1001 490L1186 1230Q1140 1277 1140 1319Q1140 1346 1154 1372Q1169 1397 1196 1411Q1223 1425 1250 1425Q1280 1425 1307 1411Q1334 1397 1348 1372Q1363 1346 1363 1319Q1352 1234 1266 1218L1174 524L1431 1039Q1388 1073 1388 1116Q1388 1144 1402 1170Q1417 1195 1444 1208Q1470 1222 1498 1222Q1528 1222 1554 1208Q1581 1195 1596 1170Q1610 1144 1610 1116Q1597 1022 1498 1022L1338 559V0H477V559ZM1281 270V495L1100 420H737L554 481V270ZM554 222V58H1281V222ZM512 562 589 520 358 1046Q365 1049 372 1053Q390 1063 400 1080Q410 1098 410 1117Q410 1137 400 1154Q390 1172 372 1182Q355 1192 335 1192Q317 1192 300 1182Q282 1172 272 1154Q261 1137 261 1117Q261 1098 271 1080Q281 1063 299 1053Q317 1043 335 1043Q342 1043 351 1044ZM661 524 797 492 610 1253Q616 1255 621 1258Q638 1268 648 1286Q657 1303 657 1322Q657 1341 648 1359Q638 1377 620 1386Q602 1396 584 1396Q565 1396 548 1386Q530 1377 520 1359Q510 1341 510 1322Q510 1303 520 1286Q529 1268 547 1258Q565 1248 584 1248Q591 1248 599 1249ZM1028 500 1143 527 1239 1248Q1244 1247 1249 1247Q1268 1247 1286 1257Q1305 1267 1314 1284Q1324 1302 1324 1321Q1324 1340 1314 1358Q1303 1376 1286 1386Q1268 1395 1249 1395Q1231 1395 1213 1386Q1195 1376 1185 1358Q1175 1340 1175 1321Q1175 1302 1185 1284Q1195 1267 1213 1257Q1221 1252 1228 1250ZM870 492H970L922 1326Q941 1326 957 1336Q974 1346 984 1364Q995 1381 995 1401Q995 1420 984 1438Q973 1455 956 1465Q939 1475 920 1475Q902 1475 884 1465Q865 1455 856 1438Q846 1420 846 1401Q846 1381 856 1364Q865 1346 884 1336Q898 1328 913 1326ZM1210 520 1314 562 1480 1052Q1491 1049 1502 1049Q1521 1049 1538 1060Q1556 1070 1566 1087Q1576 1104 1576 1124Q1576 1143 1566 1161Q1555 1179 1538 1188Q1521 1198 1502 1198Q1482 1198 1464 1188Q1447 1179 1438 1161Q1428 1143 1428 1124Q1428 1104 1438 1087Q1447 1070 1465 1059Q1469 1057 1472 1055Z" fill="#1A1612"/></g></symbol><symbol id="p-wr" viewBox="-2 -1668 1840 1840"><g transform="scale(1,-1)"><path d="M1238 1156V1250H598V1156ZM1312 179V290H524V179ZM776 1494H1053V1339H1224V1494H1494V1332H1379V1188L1287 1038V453L1379 304V161H1494V-2H341V161H456V304L549 456H550V1037H549L456 1188V1332H341V1494H606V1339H776ZM1439 54V109H397V54Z" fill="#FBF6EC" stroke="#1A1612" stroke-width="22" stroke-linejoin="round"/><path d="M776 1494H1053V1339H1224V1494H1494V1332H1379V1188L1287 1038V453L1379 304V161H1494V-2H341V161H456V304L549 456H550V1037H549L456 1188V1332H341V1494H606V1339H776ZM1439 54V109H397V54ZM1239 1056 1321 1187V1282H515V1187L597 1056ZM597 406 524 290V162H1312V290L1238 406ZM1238 458V1003L1239 1005H597V458Z" fill="#1A1612"/></g></symbol><symbol id="p-wb" viewBox="-2 -1668 1840 1840"><g transform="scale(1,-1)"><path d="M684 514Q684 574 716 627Q724 644 735 658Q675 696 639 759Q598 831 597 911V915Q598 995 639 1068Q682 1143 760 1185Q788 1199 818 1209Q792 1227 775 1256Q753 1295 753 1336Q753 1379 776 1416Q798 1454 837 1475Q876 1496 918 1496Q959 1496 998 1475Q1037 1454 1060 1416Q1082 1379 1082 1336Q1082 1295 1061 1256Q1045 1227 1019 1208Q1047 1199 1076 1185Q1153 1143 1197 1068Q1239 995 1240 915V911Q1239 831 1197 759Q1160 697 1102 659Q1113 644 1121 627Q1152 574 1152 514Q1152 456 1120 402L1398 0H438L709 404Q684 457 684 514ZM977 738V862H1149V970H977V1094H859V970H687V862H859V738Z" fill="#FBF6EC" stroke="#1A1612" stroke-width="22" stroke-linejoin="round"/><path d="M715 404Q684 457 684 514Q684 574 716 627Q724 644 735 658Q675 696 639 759Q598 831 597 911V915Q598 995 639 1068Q682 1143 760 1185Q788 1199 818 1209Q792 1227 775 1256Q753 1295 753 1336Q753 1379 776 1416Q798 1454 837 1475Q876 1496 918 1496Q959 1496 998 1475Q1037 1454 1060 1416Q1082 1379 1082 1336Q1082 1295 1061 1256Q1045 1227 1019 1208Q1047 1199 1076 1185Q1153 1143 1197 1068Q1239 995 1240 915V911Q1239 831 1197 759Q1160 697 1102 659Q1113 644 1121 627Q1152 574 1152 514Q1152 456 1120 402Q1118 399 1116 395L1398 0H438L709 404ZM977 738V862H1149V970H977V1094H859V970H687V862H859V738ZM1021 404Q1081 449 1081 522Q1081 565 1058 604Q1036 643 998 664Q959 684 917 684Q875 684 836 664Q798 643 776 604Q753 565 753 522Q753 458 816 404L594 64H1244ZM918 1449Q889 1449 863 1436Q837 1422 822 1396Q807 1369 807 1340Q807 1311 822 1284Q836 1258 862 1244Q889 1230 918 1230Q947 1230 974 1244Q1001 1258 1016 1284Q1030 1311 1030 1340Q1030 1369 1015 1396Q1000 1422 973 1436Q946 1449 918 1449Z" fill="#1A1612"/></g></symbol><symbol id="p-wn" viewBox="-2 -1668 1840 1840"><g transform="scale(1,-1)"><path d="M790 1254Q827 1277 827 1316Q827 1341 812 1370Q797 1398 797 1420Q797 1466 855 1496Q940 1415 948 1370Q955 1326 955 1313Q955 1266 921 1254H925Q925 1253 923 1253Q1459 913 1504 0H534Q521 56 521 114Q521 274 724 416Q926 557 926 670Q926 678 925 685Q859 518 742 518Q742 518 732 518Q642 372 539 372Q535 372 532 372L580 476L473 396Q359 424 332 507Q420 736 420 926Q420 953 418 979Q466 1088 565 1192Q568 1202 568 1211Q568 1239 546 1252Q523 1265 523 1300Q523 1337 543 1403Q647 1376 703 1254ZM533 999V983Q537 953 545 953H566Q635 953 635 1002Q635 1036 678 1084H672Q576 1084 539 1020ZM424 549V525Q424 496 452 496H462Q534 511 534 564L527 598Q465 598 424 549ZM922 1174 974 1085Q1349 816 1355 52H1432Q1387 902 922 1174Z" fill="#FBF6EC" stroke="#1A1612" stroke-width="22" stroke-linejoin="round"/><path d="M798 1256Q802 1264 802 1275Q802 1296 791 1318Q780 1339 780 1353Q780 1402 850 1496Q972 1392 972 1289Q972 1263 964 1236Q1454 913 1499 0H529Q516 56 516 114Q516 274 713 422Q910 570 910 634Q910 634 910 640Q820 525 764 522Q718 380 560 362L551 384L507 354Q368 400 337 480Q415 729 415 921Q415 951 413 979Q461 1088 533 1210Q512 1242 508 1252Q505 1261 505 1266Q505 1293 538 1403Q642 1376 696 1256ZM534 979Q571 1042 667 1042H673Q630 996 630 961Q630 912 561 912H540Q532 912 528 942V957ZM522 557 529 522Q529 470 457 455H447Q419 455 419 485V508Q460 557 522 557ZM676 1236Q641 1332 564 1370Q539 1308 539 1271Q539 1244 554 1228Q568 1211 568 1193Q568 1177 557 1162Q498 1065 454 966Q458 922 458 878Q458 681 384 489Q409 413 512 389L609 461L574 387Q709 397 738 541Q843 545 925 718Q936 688 936 658Q936 538 745 400Q554 262 554 137Q554 83 566 31L1441 32Q1402 855 908 1235Q909 1235 909 1236H905Q936 1246 936 1289Q936 1301 930 1340Q923 1380 846 1454Q815 1380 815 1339Q815 1320 824 1304Q833 1287 833 1268Q833 1251 825 1236Z" fill="#1A1612"/></g></symbol><symbol id="p-wp" viewBox="-2 -1668 1840 1840"><g transform="scale(1,-1)"><path d="M315 -1Q304 56 304 114Q304 274 386 420Q469 567 615 645Q653 666 693 681Q663 710 642 748Q600 823 600 905Q600 988 642 1064Q685 1139 762 1181Q789 1195 818 1205Q792 1224 777 1253Q754 1292 754 1334Q754 1376 776 1414Q798 1453 837 1474Q876 1495 917 1495Q957 1495 996 1474Q1035 1453 1058 1414Q1080 1376 1080 1334Q1080 1292 1059 1253Q1042 1224 1017 1204Q1044 1195 1074 1181Q1149 1139 1192 1064Q1235 988 1235 905Q1235 823 1194 748Q1172 710 1142 681Q1180 665 1218 645Q1365 567 1448 420Q1531 274 1531 114Q1531 56 1519 -1Z" fill="#FBF6EC" stroke="#1A1612" stroke-width="22" stroke-linejoin="round"/><path d="M917 693Q974 693 1024 721Q1075 749 1103 799Q1131 849 1131 905Q1131 961 1102 1012Q1074 1064 1023 1091Q972 1118 917 1118Q863 1118 812 1091Q762 1064 732 1012Q703 961 703 905Q703 849 732 799Q761 749 812 721Q862 693 917 693ZM858 1334Q858 1318 866 1304Q874 1291 888 1284Q902 1276 917 1276Q933 1276 947 1284Q961 1291 969 1304Q977 1318 977 1334Q977 1349 969 1363Q961 1377 946 1385Q932 1393 917 1393Q903 1393 888 1385Q874 1377 866 1363Q858 1349 858 1334ZM1461 0V-1H398V0L315 -1Q304 56 304 114Q304 274 386 420Q469 567 615 645Q653 666 693 681Q663 710 642 748Q600 823 600 905Q600 988 642 1064Q685 1139 762 1181Q789 1195 818 1205Q792 1224 777 1253Q754 1292 754 1334Q754 1376 776 1414Q798 1453 837 1474Q876 1495 917 1495Q957 1495 996 1474Q1035 1453 1058 1414Q1080 1376 1080 1334Q1080 1292 1059 1253Q1042 1224 1017 1204Q1044 1195 1074 1181Q1149 1139 1192 1064Q1235 988 1235 905Q1235 823 1194 748Q1172 710 1142 681Q1180 665 1218 645Q1365 567 1448 420Q1531 274 1531 114Q1531 56 1519 -1ZM1427 131Q1423 256 1359 369Q1290 490 1168 556Q1045 621 917 621Q788 621 666 556Q543 490 476 369Q411 256 407 131Z" fill="#1A1612"/></g></symbol><symbol id="p-bk" viewBox="-2 -1668 1840 1840"><g transform="scale(1,-1)"><path d="M848 967Q849 970 851 973Q816 1016 765 1044Q691 1085 613 1085Q535 1085 462 1044Q388 1004 346 930Q304 855 304 775Q304 694 345 621Q386 548 460 508Q482 494 505 486H848ZM989 486H1331Q1355 494 1377 508Q1451 548 1492 621Q1532 694 1532 775Q1532 855 1490 930Q1449 1004 1376 1044Q1302 1085 1223 1085Q1146 1085 1072 1044Q1020 1016 986 973Q988 970 989 967ZM540 383V80H1297V383ZM458 0V383Q416 396 378 418Q309 472 255 570Q201 668 201 775Q201 883 256 982Q311 1080 410 1133Q509 1186 613 1186Q693 1186 769 1155V1157Q769 1193 787 1224Q805 1256 837 1274Q850 1281 866 1285V1339H758V1409H866V1496H971V1409H1079V1339H971V1285Q987 1281 1000 1274Q1031 1256 1050 1224Q1068 1193 1068 1157V1155Q1144 1186 1223 1186Q1327 1186 1426 1133Q1525 1080 1580 982Q1635 883 1635 775Q1635 668 1581 570Q1527 472 1459 418Q1420 396 1379 383V0ZM825 1149Q825 1124 838 1102Q850 1081 872 1068Q895 1056 918 1056Q942 1056 964 1068Q987 1081 999 1102Q1011 1124 1011 1149Q1011 1173 999 1196Q987 1218 964 1230Q942 1241 918 1241Q895 1241 872 1230Q850 1218 838 1196Q825 1173 825 1149ZM1245 331V131H592V331ZM798 537H518Q500 544 483 556Q422 589 389 650Q356 710 356 777Q356 843 390 904Q424 966 484 1000Q543 1033 607 1033Q669 1033 730 1000Q771 977 800 941Q798 938 798 936ZM1039 936Q1039 938 1037 941Q1066 977 1107 1000Q1168 1033 1229 1033Q1294 1033 1354 1000Q1413 966 1447 904Q1481 843 1481 777Q1481 710 1448 650Q1415 589 1354 556Q1336 544 1318 537H1039Z" fill="#211C18" stroke="#0A0807" stroke-width="22" stroke-linejoin="round"/><path d="M848 967Q849 970 851 973Q816 1016 765 1044Q691 1085 613 1085Q535 1085 462 1044Q388 1004 346 930Q304 855 304 775Q304 694 345 621Q386 548 460 508Q482 494 505 486H848ZM989 486H1331Q1355 494 1377 508Q1451 548 1492 621Q1532 694 1532 775Q1532 855 1490 930Q1449 1004 1376 1044Q1302 1085 1223 1085Q1146 1085 1072 1044Q1020 1016 986 973Q988 970 989 967ZM540 383V80H1297V383ZM458 0V383Q416 396 378 418Q309 472 255 570Q201 668 201 775Q201 883 256 982Q311 1080 410 1133Q509 1186 613 1186Q693 1186 769 1155V1157Q769 1193 787 1224Q805 1256 837 1274Q850 1281 866 1285V1339H758V1409H866V1496H971V1409H1079V1339H971V1285Q987 1281 1000 1274Q1031 1256 1050 1224Q1068 1193 1068 1157V1155Q1144 1186 1223 1186Q1327 1186 1426 1133Q1525 1080 1580 982Q1635 883 1635 775Q1635 668 1581 570Q1527 472 1459 418Q1420 396 1379 383V0ZM825 1149Q825 1124 838 1102Q850 1081 872 1068Q895 1056 918 1056Q942 1056 964 1068Q987 1081 999 1102Q1011 1124 1011 1149Q1011 1173 999 1196Q987 1218 964 1230Q942 1241 918 1241Q895 1241 872 1230Q850 1218 838 1196Q825 1173 825 1149Z" fill="#5B4E42"/><path d="M848 967Q849 970 851 973Q816 1016 765 1044Q691 1085 613 1085Q535 1085 462 1044Q388 1004 346 930Q304 855 304 775Q304 694 345 621Q386 548 460 508Q482 494 505 486H848ZM989 486H1331Q1355 494 1377 508Q1451 548 1492 621Q1532 694 1532 775Q1532 855 1490 930Q1449 1004 1376 1044Q1302 1085 1223 1085Q1146 1085 1072 1044Q1020 1016 986 973Q988 970 989 967ZM540 383V80H1297V383ZM458 0V383Q416 396 378 418Q309 472 255 570Q201 668 201 775Q201 883 256 982Q311 1080 410 1133Q509 1186 613 1186Q693 1186 769 1155V1157Q769 1193 787 1224Q805 1256 837 1274Q850 1281 866 1285V1339H758V1409H866V1496H971V1409H1079V1339H971V1285Q987 1281 1000 1274Q1031 1256 1050 1224Q1068 1193 1068 1157V1155Q1144 1186 1223 1186Q1327 1186 1426 1133Q1525 1080 1580 982Q1635 883 1635 775Q1635 668 1581 570Q1527 472 1459 418Q1420 396 1379 383V0ZM825 1149Q825 1124 838 1102Q850 1081 872 1068Q895 1056 918 1056Q942 1056 964 1068Q987 1081 999 1102Q1011 1124 1011 1149Q1011 1173 999 1196Q987 1218 964 1230Q942 1241 918 1241Q895 1241 872 1230Q850 1218 838 1196Q825 1173 825 1149ZM1245 331V131H592V331ZM798 537H518Q500 544 483 556Q422 589 389 650Q356 710 356 777Q356 843 390 904Q424 966 484 1000Q543 1033 607 1033Q669 1033 730 1000Q771 977 800 941Q798 938 798 936ZM1039 936Q1039 938 1037 941Q1066 977 1107 1000Q1168 1033 1229 1033Q1294 1033 1354 1000Q1413 966 1447 904Q1481 843 1481 777Q1481 710 1448 650Q1415 589 1354 556Q1336 544 1318 537H1039Z" fill="none" stroke="#0A0807" stroke-width="30" stroke-linejoin="round"/></g></symbol><symbol id="p-bq" viewBox="-2 -1668 1840 1840"><g transform="scale(1,-1)"><path d="M333 1019Q238 1021 226 1116Q226 1144 240 1170Q255 1195 282 1209Q309 1223 338 1223Q366 1223 393 1209Q420 1195 434 1170Q448 1144 448 1116Q444 1052 387 1030L626 524L574 1226Q491 1226 473 1319Q473 1347 488 1372Q502 1397 528 1411Q555 1425 586 1425Q614 1425 640 1411Q667 1397 682 1372Q696 1347 696 1319Q694 1274 648 1240L837 492L880 1312Q813 1342 811 1390Q811 1418 826 1444Q841 1470 868 1483Q894 1496 921 1496Q950 1496 976 1483Q1003 1470 1018 1444Q1033 1418 1033 1390Q1030 1336 963 1312L1001 490L1186 1230Q1140 1277 1140 1319Q1140 1346 1154 1372Q1169 1397 1196 1411Q1223 1425 1250 1425Q1280 1425 1307 1411Q1334 1397 1348 1372Q1363 1346 1363 1319Q1352 1234 1266 1218L1174 524L1431 1039Q1388 1073 1388 1116Q1388 1144 1402 1170Q1417 1195 1444 1208Q1470 1222 1498 1222Q1528 1222 1554 1208Q1581 1195 1596 1170Q1610 1144 1610 1116Q1597 1022 1498 1022L1338 559V0H477V559ZM1281 356V434H554V356ZM1281 58V137H554V58Z" fill="#211C18" stroke="#0A0807" stroke-width="22" stroke-linejoin="round"/><path d="M333 1019Q238 1021 226 1116Q226 1144 240 1170Q255 1195 282 1209Q309 1223 338 1223Q366 1223 393 1209Q420 1195 434 1170Q448 1144 448 1116Q444 1052 387 1030L626 524L574 1226Q491 1226 473 1319Q473 1347 488 1372Q502 1397 528 1411Q555 1425 586 1425Q614 1425 640 1411Q667 1397 682 1372Q696 1347 696 1319Q694 1274 648 1240L837 492L880 1312Q813 1342 811 1390Q811 1418 826 1444Q841 1470 868 1483Q894 1496 921 1496Q950 1496 976 1483Q1003 1470 1018 1444Q1033 1418 1033 1390Q1030 1336 963 1312L1001 490L1186 1230Q1140 1277 1140 1319Q1140 1346 1154 1372Q1169 1397 1196 1411Q1223 1425 1250 1425Q1280 1425 1307 1411Q1334 1397 1348 1372Q1363 1346 1363 1319Q1352 1234 1266 1218L1174 524L1431 1039Q1388 1073 1388 1116Q1388 1144 1402 1170Q1417 1195 1444 1208Q1470 1222 1498 1222Q1528 1222 1554 1208Q1581 1195 1596 1170Q1610 1144 1610 1116Q1597 1022 1498 1022L1338 559V0H477V559ZM1281 270V495L1100 420H737L554 481V270ZM554 222V58H1281V222ZM512 562 589 520 358 1046Q365 1049 372 1053Q390 1063 400 1080Q410 1098 410 1117Q410 1137 400 1154Q390 1172 372 1182Q355 1192 335 1192Q317 1192 300 1182Q282 1172 272 1154Q261 1137 261 1117Q261 1098 271 1080Q281 1063 299 1053Q317 1043 335 1043Q342 1043 351 1044ZM661 524 797 492 610 1253Q616 1255 621 1258Q638 1268 648 1286Q657 1303 657 1322Q657 1341 648 1359Q638 1377 620 1386Q602 1396 584 1396Q565 1396 548 1386Q530 1377 520 1359Q510 1341 510 1322Q510 1303 520 1286Q529 1268 547 1258Q565 1248 584 1248Q591 1248 599 1249ZM1028 500 1143 527 1239 1248Q1244 1247 1249 1247Q1268 1247 1286 1257Q1305 1267 1314 1284Q1324 1302 1324 1321Q1324 1340 1314 1358Q1303 1376 1286 1386Q1268 1395 1249 1395Q1231 1395 1213 1386Q1195 1376 1185 1358Q1175 1340 1175 1321Q1175 1302 1185 1284Q1195 1267 1213 1257Q1221 1252 1228 1250ZM870 492H970L922 1326Q941 1326 957 1336Q974 1346 984 1364Q995 1381 995 1401Q995 1420 984 1438Q973 1455 956 1465Q939 1475 920 1475Q902 1475 884 1465Q865 1455 856 1438Q846 1420 846 1401Q846 1381 856 1364Q865 1346 884 1336Q898 1328 913 1326ZM1210 520 1314 562 1480 1052Q1491 1049 1502 1049Q1521 1049 1538 1060Q1556 1070 1566 1087Q1576 1104 1576 1124Q1576 1143 1566 1161Q1555 1179 1538 1188Q1521 1198 1502 1198Q1482 1198 1464 1188Q1447 1179 1438 1161Q1428 1143 1428 1124Q1428 1104 1438 1087Q1447 1070 1465 1059Q1469 1057 1472 1055Z" fill="#5B4E42"/><path d="M333 1019Q238 1021 226 1116Q226 1144 240 1170Q255 1195 282 1209Q309 1223 338 1223Q366 1223 393 1209Q420 1195 434 1170Q448 1144 448 1116Q444 1052 387 1030L626 524L574 1226Q491 1226 473 1319Q473 1347 488 1372Q502 1397 528 1411Q555 1425 586 1425Q614 1425 640 1411Q667 1397 682 1372Q696 1347 696 1319Q694 1274 648 1240L837 492L880 1312Q813 1342 811 1390Q811 1418 826 1444Q841 1470 868 1483Q894 1496 921 1496Q950 1496 976 1483Q1003 1470 1018 1444Q1033 1418 1033 1390Q1030 1336 963 1312L1001 490L1186 1230Q1140 1277 1140 1319Q1140 1346 1154 1372Q1169 1397 1196 1411Q1223 1425 1250 1425Q1280 1425 1307 1411Q1334 1397 1348 1372Q1363 1346 1363 1319Q1352 1234 1266 1218L1174 524L1431 1039Q1388 1073 1388 1116Q1388 1144 1402 1170Q1417 1195 1444 1208Q1470 1222 1498 1222Q1528 1222 1554 1208Q1581 1195 1596 1170Q1610 1144 1610 1116Q1597 1022 1498 1022L1338 559V0H477V559ZM1281 356V434H554V356ZM1281 58V137H554V58Z" fill="none" stroke="#0A0807" stroke-width="30" stroke-linejoin="round"/></g></symbol><symbol id="p-br" viewBox="-2 -1668 1840 1840"><g transform="scale(1,-1)"><path d="M1238 1156V1250H598V1156ZM1312 179V290H524V179ZM776 1494H1053V1339H1224V1494H1494V1332H1379V1188L1287 1038V453L1379 304V161H1494V-2H341V161H456V304L549 456H550V1037H549L456 1188V1332H341V1494H606V1339H776ZM1439 54V109H397V54Z" fill="#211C18" stroke="#0A0807" stroke-width="22" stroke-linejoin="round"/><path d="M776 1494H1053V1339H1224V1494H1494V1332H1379V1188L1287 1038V453L1379 304V161H1494V-2H341V161H456V304L549 456H550V1037H549L456 1188V1332H341V1494H606V1339H776ZM1439 54V109H397V54ZM1239 1056 1321 1187V1282H515V1187L597 1056ZM597 406 524 290V162H1312V290L1238 406ZM1238 458V1003L1239 1005H597V458Z" fill="#5B4E42"/><path d="M1238 1156V1250H598V1156ZM1312 179V290H524V179ZM776 1494H1053V1339H1224V1494H1494V1332H1379V1188L1287 1038V453L1379 304V161H1494V-2H341V161H456V304L549 456H550V1037H549L456 1188V1332H341V1494H606V1339H776ZM1439 54V109H397V54Z" fill="none" stroke="#0A0807" stroke-width="30" stroke-linejoin="round"/></g></symbol><symbol id="p-bb" viewBox="-2 -1668 1840 1840"><g transform="scale(1,-1)"><path d="M684 514Q684 574 716 627Q724 644 735 658Q675 696 639 759Q598 831 597 911V915Q598 995 639 1068Q682 1143 760 1185Q788 1199 818 1209Q792 1227 775 1256Q753 1295 753 1336Q753 1379 776 1416Q798 1454 837 1475Q876 1496 918 1496Q959 1496 998 1475Q1037 1454 1060 1416Q1082 1379 1082 1336Q1082 1295 1061 1256Q1045 1227 1019 1208Q1047 1199 1076 1185Q1153 1143 1197 1068Q1239 995 1240 915V911Q1239 831 1197 759Q1160 697 1102 659Q1113 644 1121 627Q1152 574 1152 514Q1152 456 1120 402L1398 0H438L709 404Q684 457 684 514ZM977 738V862H1149V970H977V1094H859V970H687V862H859V738Z" fill="#211C18" stroke="#0A0807" stroke-width="22" stroke-linejoin="round"/><path d="M715 404Q684 457 684 514Q684 574 716 627Q724 644 735 658Q675 696 639 759Q598 831 597 911V915Q598 995 639 1068Q682 1143 760 1185Q788 1199 818 1209Q792 1227 775 1256Q753 1295 753 1336Q753 1379 776 1416Q798 1454 837 1475Q876 1496 918 1496Q959 1496 998 1475Q1037 1454 1060 1416Q1082 1379 1082 1336Q1082 1295 1061 1256Q1045 1227 1019 1208Q1047 1199 1076 1185Q1153 1143 1197 1068Q1239 995 1240 915V911Q1239 831 1197 759Q1160 697 1102 659Q1113 644 1121 627Q1152 574 1152 514Q1152 456 1120 402Q1118 399 1116 395L1398 0H438L709 404ZM977 738V862H1149V970H977V1094H859V970H687V862H859V738ZM1021 404Q1081 449 1081 522Q1081 565 1058 604Q1036 643 998 664Q959 684 917 684Q875 684 836 664Q798 643 776 604Q753 565 753 522Q753 458 816 404L594 64H1244ZM918 1449Q889 1449 863 1436Q837 1422 822 1396Q807 1369 807 1340Q807 1311 822 1284Q836 1258 862 1244Q889 1230 918 1230Q947 1230 974 1244Q1001 1258 1016 1284Q1030 1311 1030 1340Q1030 1369 1015 1396Q1000 1422 973 1436Q946 1449 918 1449Z" fill="#5B4E42"/><path d="M684 514Q684 574 716 627Q724 644 735 658Q675 696 639 759Q598 831 597 911V915Q598 995 639 1068Q682 1143 760 1185Q788 1199 818 1209Q792 1227 775 1256Q753 1295 753 1336Q753 1379 776 1416Q798 1454 837 1475Q876 1496 918 1496Q959 1496 998 1475Q1037 1454 1060 1416Q1082 1379 1082 1336Q1082 1295 1061 1256Q1045 1227 1019 1208Q1047 1199 1076 1185Q1153 1143 1197 1068Q1239 995 1240 915V911Q1239 831 1197 759Q1160 697 1102 659Q1113 644 1121 627Q1152 574 1152 514Q1152 456 1120 402L1398 0H438L709 404Q684 457 684 514ZM977 738V862H1149V970H977V1094H859V970H687V862H859V738Z" fill="none" stroke="#0A0807" stroke-width="30" stroke-linejoin="round"/></g></symbol><symbol id="p-bn" viewBox="-2 -1668 1840 1840"><g transform="scale(1,-1)"><path d="M790 1254Q827 1277 827 1316Q827 1341 812 1370Q797 1398 797 1420Q797 1466 855 1496Q940 1415 948 1370Q955 1326 955 1313Q955 1266 921 1254H925Q925 1253 923 1253Q1459 913 1504 0H534Q521 56 521 114Q521 274 724 416Q926 557 926 670Q926 678 925 685Q859 518 742 518Q742 518 732 518Q642 372 539 372Q535 372 532 372L580 476L473 396Q359 424 332 507Q420 736 420 926Q420 953 418 979Q466 1088 565 1192Q568 1202 568 1211Q568 1239 546 1252Q523 1265 523 1300Q523 1337 543 1403Q647 1376 703 1254ZM533 999V983Q537 953 545 953H566Q635 953 635 1002Q635 1036 678 1084H672Q576 1084 539 1020ZM424 549V525Q424 496 452 496H462Q534 511 534 564L527 598Q465 598 424 549ZM922 1174 974 1085Q1349 816 1355 52H1432Q1387 902 922 1174Z" fill="#211C18" stroke="#0A0807" stroke-width="22" stroke-linejoin="round"/><path d="M798 1256Q802 1264 802 1275Q802 1296 791 1318Q780 1339 780 1353Q780 1402 850 1496Q972 1392 972 1289Q972 1263 964 1236Q1454 913 1499 0H529Q516 56 516 114Q516 274 713 422Q910 570 910 634Q910 634 910 640Q820 525 764 522Q718 380 560 362L551 384L507 354Q368 400 337 480Q415 729 415 921Q415 951 413 979Q461 1088 533 1210Q512 1242 508 1252Q505 1261 505 1266Q505 1293 538 1403Q642 1376 696 1256ZM534 979Q571 1042 667 1042H673Q630 996 630 961Q630 912 561 912H540Q532 912 528 942V957ZM522 557 529 522Q529 470 457 455H447Q419 455 419 485V508Q460 557 522 557ZM676 1236Q641 1332 564 1370Q539 1308 539 1271Q539 1244 554 1228Q568 1211 568 1193Q568 1177 557 1162Q498 1065 454 966Q458 922 458 878Q458 681 384 489Q409 413 512 389L609 461L574 387Q709 397 738 541Q843 545 925 718Q936 688 936 658Q936 538 745 400Q554 262 554 137Q554 83 566 31L1441 32Q1402 855 908 1235Q909 1235 909 1236H905Q936 1246 936 1289Q936 1301 930 1340Q923 1380 846 1454Q815 1380 815 1339Q815 1320 824 1304Q833 1287 833 1268Q833 1251 825 1236Z" fill="#5B4E42"/><path d="M790 1254Q827 1277 827 1316Q827 1341 812 1370Q797 1398 797 1420Q797 1466 855 1496Q940 1415 948 1370Q955 1326 955 1313Q955 1266 921 1254H925Q925 1253 923 1253Q1459 913 1504 0H534Q521 56 521 114Q521 274 724 416Q926 557 926 670Q926 678 925 685Q859 518 742 518Q742 518 732 518Q642 372 539 372Q535 372 532 372L580 476L473 396Q359 424 332 507Q420 736 420 926Q420 953 418 979Q466 1088 565 1192Q568 1202 568 1211Q568 1239 546 1252Q523 1265 523 1300Q523 1337 543 1403Q647 1376 703 1254ZM533 999V983Q537 953 545 953H566Q635 953 635 1002Q635 1036 678 1084H672Q576 1084 539 1020ZM424 549V525Q424 496 452 496H462Q534 511 534 564L527 598Q465 598 424 549ZM922 1174 974 1085Q1349 816 1355 52H1432Q1387 902 922 1174Z" fill="none" stroke="#0A0807" stroke-width="30" stroke-linejoin="round"/></g></symbol><symbol id="p-bp" viewBox="-2 -1668 1840 1840"><g transform="scale(1,-1)"><path d="M315 -1Q304 56 304 114Q304 274 386 420Q469 567 615 645Q653 666 693 681Q663 710 642 748Q600 823 600 905Q600 988 642 1064Q685 1139 762 1181Q789 1195 818 1205Q792 1224 777 1253Q754 1292 754 1334Q754 1376 776 1414Q798 1453 837 1474Q876 1495 917 1495Q957 1495 996 1474Q1035 1453 1058 1414Q1080 1376 1080 1334Q1080 1292 1059 1253Q1042 1224 1017 1204Q1044 1195 1074 1181Q1149 1139 1192 1064Q1235 988 1235 905Q1235 823 1194 748Q1172 710 1142 681Q1180 665 1218 645Q1365 567 1448 420Q1531 274 1531 114Q1531 56 1519 -1Z" fill="#211C18" stroke="#0A0807" stroke-width="22" stroke-linejoin="round"/><path d="M917 693Q974 693 1024 721Q1075 749 1103 799Q1131 849 1131 905Q1131 961 1102 1012Q1074 1064 1023 1091Q972 1118 917 1118Q863 1118 812 1091Q762 1064 732 1012Q703 961 703 905Q703 849 732 799Q761 749 812 721Q862 693 917 693ZM858 1334Q858 1318 866 1304Q874 1291 888 1284Q902 1276 917 1276Q933 1276 947 1284Q961 1291 969 1304Q977 1318 977 1334Q977 1349 969 1363Q961 1377 946 1385Q932 1393 917 1393Q903 1393 888 1385Q874 1377 866 1363Q858 1349 858 1334ZM1461 0V-1H398V0L315 -1Q304 56 304 114Q304 274 386 420Q469 567 615 645Q653 666 693 681Q663 710 642 748Q600 823 600 905Q600 988 642 1064Q685 1139 762 1181Q789 1195 818 1205Q792 1224 777 1253Q754 1292 754 1334Q754 1376 776 1414Q798 1453 837 1474Q876 1495 917 1495Q957 1495 996 1474Q1035 1453 1058 1414Q1080 1376 1080 1334Q1080 1292 1059 1253Q1042 1224 1017 1204Q1044 1195 1074 1181Q1149 1139 1192 1064Q1235 988 1235 905Q1235 823 1194 748Q1172 710 1142 681Q1180 665 1218 645Q1365 567 1448 420Q1531 274 1531 114Q1531 56 1519 -1ZM1427 131Q1423 256 1359 369Q1290 490 1168 556Q1045 621 917 621Q788 621 666 556Q543 490 476 369Q411 256 407 131Z" fill="#5B4E42"/><path d="M315 -1Q304 56 304 114Q304 274 386 420Q469 567 615 645Q653 666 693 681Q663 710 642 748Q600 823 600 905Q600 988 642 1064Q685 1139 762 1181Q789 1195 818 1205Q792 1224 777 1253Q754 1292 754 1334Q754 1376 776 1414Q798 1453 837 1474Q876 1495 917 1495Q957 1495 996 1474Q1035 1453 1058 1414Q1080 1376 1080 1334Q1080 1292 1059 1253Q1042 1224 1017 1204Q1044 1195 1074 1181Q1149 1139 1192 1064Q1235 988 1235 905Q1235 823 1194 748Q1172 710 1142 681Q1180 665 1218 645Q1365 567 1448 420Q1531 274 1531 114Q1531 56 1519 -1Z" fill="none" stroke="#0A0807" stroke-width="30" stroke-linejoin="round"/></g></symbol><symbol id="g-k" viewBox="-2 -1668 1840 1840"><g transform="scale(1,-1)"><path d="M848 967Q849 970 851 973Q816 1016 765 1044Q691 1085 613 1085Q535 1085 462 1044Q388 1004 346 930Q304 855 304 775Q304 694 345 621Q386 548 460 508Q482 494 505 486H848ZM989 486H1331Q1355 494 1377 508Q1451 548 1492 621Q1532 694 1532 775Q1532 855 1490 930Q1449 1004 1376 1044Q1302 1085 1223 1085Q1146 1085 1072 1044Q1020 1016 986 973Q988 970 989 967ZM540 383V80H1297V383ZM458 0V383Q416 396 378 418Q309 472 255 570Q201 668 201 775Q201 883 256 982Q311 1080 410 1133Q509 1186 613 1186Q693 1186 769 1155V1157Q769 1193 787 1224Q805 1256 837 1274Q850 1281 866 1285V1339H758V1409H866V1496H971V1409H1079V1339H971V1285Q987 1281 1000 1274Q1031 1256 1050 1224Q1068 1193 1068 1157V1155Q1144 1186 1223 1186Q1327 1186 1426 1133Q1525 1080 1580 982Q1635 883 1635 775Q1635 668 1581 570Q1527 472 1459 418Q1420 396 1379 383V0ZM825 1149Q825 1124 838 1102Q850 1081 872 1068Q895 1056 918 1056Q942 1056 964 1068Q987 1081 999 1102Q1011 1124 1011 1149Q1011 1173 999 1196Q987 1218 964 1230Q942 1241 918 1241Q895 1241 872 1230Q850 1218 838 1196Q825 1173 825 1149ZM1245 331V131H592V331ZM798 537H518Q500 544 483 556Q422 589 389 650Q356 710 356 777Q356 843 390 904Q424 966 484 1000Q543 1033 607 1033Q669 1033 730 1000Q771 977 800 941Q798 938 798 936ZM1039 936Q1039 938 1037 941Q1066 977 1107 1000Q1168 1033 1229 1033Q1294 1033 1354 1000Q1413 966 1447 904Q1481 843 1481 777Q1481 710 1448 650Q1415 589 1354 556Q1336 544 1318 537H1039Z" fill="url(#goldg)"/><path d="M848 967Q849 970 851 973Q816 1016 765 1044Q691 1085 613 1085Q535 1085 462 1044Q388 1004 346 930Q304 855 304 775Q304 694 345 621Q386 548 460 508Q482 494 505 486H848ZM989 486H1331Q1355 494 1377 508Q1451 548 1492 621Q1532 694 1532 775Q1532 855 1490 930Q1449 1004 1376 1044Q1302 1085 1223 1085Q1146 1085 1072 1044Q1020 1016 986 973Q988 970 989 967ZM540 383V80H1297V383ZM458 0V383Q416 396 378 418Q309 472 255 570Q201 668 201 775Q201 883 256 982Q311 1080 410 1133Q509 1186 613 1186Q693 1186 769 1155V1157Q769 1193 787 1224Q805 1256 837 1274Q850 1281 866 1285V1339H758V1409H866V1496H971V1409H1079V1339H971V1285Q987 1281 1000 1274Q1031 1256 1050 1224Q1068 1193 1068 1157V1155Q1144 1186 1223 1186Q1327 1186 1426 1133Q1525 1080 1580 982Q1635 883 1635 775Q1635 668 1581 570Q1527 472 1459 418Q1420 396 1379 383V0ZM825 1149Q825 1124 838 1102Q850 1081 872 1068Q895 1056 918 1056Q942 1056 964 1068Q987 1081 999 1102Q1011 1124 1011 1149Q1011 1173 999 1196Q987 1218 964 1230Q942 1241 918 1241Q895 1241 872 1230Q850 1218 838 1196Q825 1173 825 1149Z" fill="#4A3410"/></g></symbol><symbol id="g-q" viewBox="-2 -1668 1840 1840"><g transform="scale(1,-1)"><path d="M333 1019Q238 1021 226 1116Q226 1144 240 1170Q255 1195 282 1209Q309 1223 338 1223Q366 1223 393 1209Q420 1195 434 1170Q448 1144 448 1116Q444 1052 387 1030L626 524L574 1226Q491 1226 473 1319Q473 1347 488 1372Q502 1397 528 1411Q555 1425 586 1425Q614 1425 640 1411Q667 1397 682 1372Q696 1347 696 1319Q694 1274 648 1240L837 492L880 1312Q813 1342 811 1390Q811 1418 826 1444Q841 1470 868 1483Q894 1496 921 1496Q950 1496 976 1483Q1003 1470 1018 1444Q1033 1418 1033 1390Q1030 1336 963 1312L1001 490L1186 1230Q1140 1277 1140 1319Q1140 1346 1154 1372Q1169 1397 1196 1411Q1223 1425 1250 1425Q1280 1425 1307 1411Q1334 1397 1348 1372Q1363 1346 1363 1319Q1352 1234 1266 1218L1174 524L1431 1039Q1388 1073 1388 1116Q1388 1144 1402 1170Q1417 1195 1444 1208Q1470 1222 1498 1222Q1528 1222 1554 1208Q1581 1195 1596 1170Q1610 1144 1610 1116Q1597 1022 1498 1022L1338 559V0H477V559ZM1281 356V434H554V356ZM1281 58V137H554V58Z" fill="url(#goldg)"/><path d="M333 1019Q238 1021 226 1116Q226 1144 240 1170Q255 1195 282 1209Q309 1223 338 1223Q366 1223 393 1209Q420 1195 434 1170Q448 1144 448 1116Q444 1052 387 1030L626 524L574 1226Q491 1226 473 1319Q473 1347 488 1372Q502 1397 528 1411Q555 1425 586 1425Q614 1425 640 1411Q667 1397 682 1372Q696 1347 696 1319Q694 1274 648 1240L837 492L880 1312Q813 1342 811 1390Q811 1418 826 1444Q841 1470 868 1483Q894 1496 921 1496Q950 1496 976 1483Q1003 1470 1018 1444Q1033 1418 1033 1390Q1030 1336 963 1312L1001 490L1186 1230Q1140 1277 1140 1319Q1140 1346 1154 1372Q1169 1397 1196 1411Q1223 1425 1250 1425Q1280 1425 1307 1411Q1334 1397 1348 1372Q1363 1346 1363 1319Q1352 1234 1266 1218L1174 524L1431 1039Q1388 1073 1388 1116Q1388 1144 1402 1170Q1417 1195 1444 1208Q1470 1222 1498 1222Q1528 1222 1554 1208Q1581 1195 1596 1170Q1610 1144 1610 1116Q1597 1022 1498 1022L1338 559V0H477V559ZM1281 270V495L1100 420H737L554 481V270ZM554 222V58H1281V222ZM512 562 589 520 358 1046Q365 1049 372 1053Q390 1063 400 1080Q410 1098 410 1117Q410 1137 400 1154Q390 1172 372 1182Q355 1192 335 1192Q317 1192 300 1182Q282 1172 272 1154Q261 1137 261 1117Q261 1098 271 1080Q281 1063 299 1053Q317 1043 335 1043Q342 1043 351 1044ZM661 524 797 492 610 1253Q616 1255 621 1258Q638 1268 648 1286Q657 1303 657 1322Q657 1341 648 1359Q638 1377 620 1386Q602 1396 584 1396Q565 1396 548 1386Q530 1377 520 1359Q510 1341 510 1322Q510 1303 520 1286Q529 1268 547 1258Q565 1248 584 1248Q591 1248 599 1249ZM1028 500 1143 527 1239 1248Q1244 1247 1249 1247Q1268 1247 1286 1257Q1305 1267 1314 1284Q1324 1302 1324 1321Q1324 1340 1314 1358Q1303 1376 1286 1386Q1268 1395 1249 1395Q1231 1395 1213 1386Q1195 1376 1185 1358Q1175 1340 1175 1321Q1175 1302 1185 1284Q1195 1267 1213 1257Q1221 1252 1228 1250ZM870 492H970L922 1326Q941 1326 957 1336Q974 1346 984 1364Q995 1381 995 1401Q995 1420 984 1438Q973 1455 956 1465Q939 1475 920 1475Q902 1475 884 1465Q865 1455 856 1438Q846 1420 846 1401Q846 1381 856 1364Q865 1346 884 1336Q898 1328 913 1326ZM1210 520 1314 562 1480 1052Q1491 1049 1502 1049Q1521 1049 1538 1060Q1556 1070 1566 1087Q1576 1104 1576 1124Q1576 1143 1566 1161Q1555 1179 1538 1188Q1521 1198 1502 1198Q1482 1198 1464 1188Q1447 1179 1438 1161Q1428 1143 1428 1124Q1428 1104 1438 1087Q1447 1070 1465 1059Q1469 1057 1472 1055Z" fill="#4A3410"/></g></symbol><symbol id="g-r" viewBox="-2 -1668 1840 1840"><g transform="scale(1,-1)"><path d="M1238 1156V1250H598V1156ZM1312 179V290H524V179ZM776 1494H1053V1339H1224V1494H1494V1332H1379V1188L1287 1038V453L1379 304V161H1494V-2H341V161H456V304L549 456H550V1037H549L456 1188V1332H341V1494H606V1339H776ZM1439 54V109H397V54Z" fill="url(#goldg)"/><path d="M776 1494H1053V1339H1224V1494H1494V1332H1379V1188L1287 1038V453L1379 304V161H1494V-2H341V161H456V304L549 456H550V1037H549L456 1188V1332H341V1494H606V1339H776ZM1439 54V109H397V54ZM1239 1056 1321 1187V1282H515V1187L597 1056ZM597 406 524 290V162H1312V290L1238 406ZM1238 458V1003L1239 1005H597V458Z" fill="#4A3410"/></g></symbol><symbol id="g-b" viewBox="-2 -1668 1840 1840"><g transform="scale(1,-1)"><path d="M684 514Q684 574 716 627Q724 644 735 658Q675 696 639 759Q598 831 597 911V915Q598 995 639 1068Q682 1143 760 1185Q788 1199 818 1209Q792 1227 775 1256Q753 1295 753 1336Q753 1379 776 1416Q798 1454 837 1475Q876 1496 918 1496Q959 1496 998 1475Q1037 1454 1060 1416Q1082 1379 1082 1336Q1082 1295 1061 1256Q1045 1227 1019 1208Q1047 1199 1076 1185Q1153 1143 1197 1068Q1239 995 1240 915V911Q1239 831 1197 759Q1160 697 1102 659Q1113 644 1121 627Q1152 574 1152 514Q1152 456 1120 402L1398 0H438L709 404Q684 457 684 514ZM977 738V862H1149V970H977V1094H859V970H687V862H859V738Z" fill="url(#goldg)"/><path d="M715 404Q684 457 684 514Q684 574 716 627Q724 644 735 658Q675 696 639 759Q598 831 597 911V915Q598 995 639 1068Q682 1143 760 1185Q788 1199 818 1209Q792 1227 775 1256Q753 1295 753 1336Q753 1379 776 1416Q798 1454 837 1475Q876 1496 918 1496Q959 1496 998 1475Q1037 1454 1060 1416Q1082 1379 1082 1336Q1082 1295 1061 1256Q1045 1227 1019 1208Q1047 1199 1076 1185Q1153 1143 1197 1068Q1239 995 1240 915V911Q1239 831 1197 759Q1160 697 1102 659Q1113 644 1121 627Q1152 574 1152 514Q1152 456 1120 402Q1118 399 1116 395L1398 0H438L709 404ZM977 738V862H1149V970H977V1094H859V970H687V862H859V738ZM1021 404Q1081 449 1081 522Q1081 565 1058 604Q1036 643 998 664Q959 684 917 684Q875 684 836 664Q798 643 776 604Q753 565 753 522Q753 458 816 404L594 64H1244ZM918 1449Q889 1449 863 1436Q837 1422 822 1396Q807 1369 807 1340Q807 1311 822 1284Q836 1258 862 1244Q889 1230 918 1230Q947 1230 974 1244Q1001 1258 1016 1284Q1030 1311 1030 1340Q1030 1369 1015 1396Q1000 1422 973 1436Q946 1449 918 1449Z" fill="#4A3410"/></g></symbol><symbol id="g-n" viewBox="-2 -1668 1840 1840"><g transform="scale(1,-1)"><path d="M790 1254Q827 1277 827 1316Q827 1341 812 1370Q797 1398 797 1420Q797 1466 855 1496Q940 1415 948 1370Q955 1326 955 1313Q955 1266 921 1254H925Q925 1253 923 1253Q1459 913 1504 0H534Q521 56 521 114Q521 274 724 416Q926 557 926 670Q926 678 925 685Q859 518 742 518Q742 518 732 518Q642 372 539 372Q535 372 532 372L580 476L473 396Q359 424 332 507Q420 736 420 926Q420 953 418 979Q466 1088 565 1192Q568 1202 568 1211Q568 1239 546 1252Q523 1265 523 1300Q523 1337 543 1403Q647 1376 703 1254ZM533 999V983Q537 953 545 953H566Q635 953 635 1002Q635 1036 678 1084H672Q576 1084 539 1020ZM424 549V525Q424 496 452 496H462Q534 511 534 564L527 598Q465 598 424 549ZM922 1174 974 1085Q1349 816 1355 52H1432Q1387 902 922 1174Z" fill="url(#goldg)"/><path d="M798 1256Q802 1264 802 1275Q802 1296 791 1318Q780 1339 780 1353Q780 1402 850 1496Q972 1392 972 1289Q972 1263 964 1236Q1454 913 1499 0H529Q516 56 516 114Q516 274 713 422Q910 570 910 634Q910 634 910 640Q820 525 764 522Q718 380 560 362L551 384L507 354Q368 400 337 480Q415 729 415 921Q415 951 413 979Q461 1088 533 1210Q512 1242 508 1252Q505 1261 505 1266Q505 1293 538 1403Q642 1376 696 1256ZM534 979Q571 1042 667 1042H673Q630 996 630 961Q630 912 561 912H540Q532 912 528 942V957ZM522 557 529 522Q529 470 457 455H447Q419 455 419 485V508Q460 557 522 557ZM676 1236Q641 1332 564 1370Q539 1308 539 1271Q539 1244 554 1228Q568 1211 568 1193Q568 1177 557 1162Q498 1065 454 966Q458 922 458 878Q458 681 384 489Q409 413 512 389L609 461L574 387Q709 397 738 541Q843 545 925 718Q936 688 936 658Q936 538 745 400Q554 262 554 137Q554 83 566 31L1441 32Q1402 855 908 1235Q909 1235 909 1236H905Q936 1246 936 1289Q936 1301 930 1340Q923 1380 846 1454Q815 1380 815 1339Q815 1320 824 1304Q833 1287 833 1268Q833 1251 825 1236Z" fill="#4A3410"/></g></symbol><symbol id="g-p" viewBox="-2 -1668 1840 1840"><g transform="scale(1,-1)"><path d="M315 -1Q304 56 304 114Q304 274 386 420Q469 567 615 645Q653 666 693 681Q663 710 642 748Q600 823 600 905Q600 988 642 1064Q685 1139 762 1181Q789 1195 818 1205Q792 1224 777 1253Q754 1292 754 1334Q754 1376 776 1414Q798 1453 837 1474Q876 1495 917 1495Q957 1495 996 1474Q1035 1453 1058 1414Q1080 1376 1080 1334Q1080 1292 1059 1253Q1042 1224 1017 1204Q1044 1195 1074 1181Q1149 1139 1192 1064Q1235 988 1235 905Q1235 823 1194 748Q1172 710 1142 681Q1180 665 1218 645Q1365 567 1448 420Q1531 274 1531 114Q1531 56 1519 -1Z" fill="url(#goldg)"/><path d="M917 693Q974 693 1024 721Q1075 749 1103 799Q1131 849 1131 905Q1131 961 1102 1012Q1074 1064 1023 1091Q972 1118 917 1118Q863 1118 812 1091Q762 1064 732 1012Q703 961 703 905Q703 849 732 799Q761 749 812 721Q862 693 917 693ZM858 1334Q858 1318 866 1304Q874 1291 888 1284Q902 1276 917 1276Q933 1276 947 1284Q961 1291 969 1304Q977 1318 977 1334Q977 1349 969 1363Q961 1377 946 1385Q932 1393 917 1393Q903 1393 888 1385Q874 1377 866 1363Q858 1349 858 1334ZM1461 0V-1H398V0L315 -1Q304 56 304 114Q304 274 386 420Q469 567 615 645Q653 666 693 681Q663 710 642 748Q600 823 600 905Q600 988 642 1064Q685 1139 762 1181Q789 1195 818 1205Q792 1224 777 1253Q754 1292 754 1334Q754 1376 776 1414Q798 1453 837 1474Q876 1495 917 1495Q957 1495 996 1474Q1035 1453 1058 1414Q1080 1376 1080 1334Q1080 1292 1059 1253Q1042 1224 1017 1204Q1044 1195 1074 1181Q1149 1139 1192 1064Q1235 988 1235 905Q1235 823 1194 748Q1172 710 1142 681Q1180 665 1218 645Q1365 567 1448 420Q1531 274 1531 114Q1531 56 1519 -1ZM1427 131Q1423 256 1359 369Q1290 490 1168 556Q1045 621 917 621Q788 621 666 556Q543 490 476 369Q411 256 407 131Z" fill="#4A3410"/></g></symbol>
+  </defs>
+</svg>
+
+<div class="app" id="app"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+<script>
+"use strict";
+/* ===================================================================
+   Dee Chess — play against an AI that coaches you, and gives less help
+   as your rank rises. Engine: Stockfish (runs in your browser).
+   =================================================================== */
+
+const SF_URL = "https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js";
+const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const $ = (sel, root = document) => root.querySelector(sel);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+/* ---------------- Ranks ---------------- */
+const RANKS = [
+  { id: "initiate", name: "Initiate", piece: "p", min: 0, depth: "full", pauses: ["blunder"], tagline: "Every master started here. I'll show you what went wrong and what to play." },
+  { id: "squire", name: "Squire", piece: "n", min: 800, depth: "full", pauses: ["blunder", "mistake"], tagline: "You stopped giving pieces away. Now I'll catch your mistakes too." },
+  { id: "tactician", name: "Tactician", piece: "b", min: 1200, depth: "why", pauses: ["blunder", "mistake"], tagline: "From now on I'll tell you why. You find the answer." },
+  { id: "strategist", name: "Strategist", piece: "r", min: 1500, depth: "why", pauses: ["blunder", "mistake", "inaccuracy"], tagline: "I'll be stricter now. Even small slips get flagged." },
+  { id: "sovereign", name: "Sovereign", piece: "q", min: 1800, depth: "why", pauses: ["blunder", "mistake", "inaccuracy"], tagline: "You rule the board. One more step to the top." },
+  { id: "dee_one", name: "Dee One", piece: "k", min: 2200, depth: "wrong", pauses: ["blunder", "mistake", "inaccuracy"], tagline: "The top. From here I only say “wrong”. The why is yours to find." },
+];
+const RANK_CUSHION = 50;
+const rankById = (id) => RANKS.find((r) => r.id === id) || RANKS[0];
+const rankIdx = (r) => RANKS.findIndex((x) => x.id === r.id);
+function rankForRating(rating) { let res = RANKS[0]; for (const r of RANKS) if (rating >= r.min) res = r; return res; }
+const nextRank = (r) => RANKS[rankIdx(r) + 1] || null;
+function progressToNext(rating, rank) { const n = nextRank(rank); if (!n) return 1; return clamp((rating - rank.min) / (n.min - rank.min), 0, 1); }
+function resolveRank(current, rating, gatePassed) {
+  let i = rankIdx(current);
+  while (i > 0 && rating < RANKS[i].min - RANK_CUSHION) i--;
+  const earned = rankIdx(rankForRating(rating));
+  if (earned > i && gatePassed) i = earned;
+  return RANKS[i];
+}
+const givesBetterMove = (rank) => rank.depth === "full";
+const explainsWhy = (rank) => rank.depth !== "wrong";
+
+/* ---------------- Rating ---------------- */
+const STARTING_RATING = 600;
+const PLACEMENT_BOTS = [400, 600, 800];
+const kFactor = (games) => (games < 20 ? 40 : 20);
+const expectedScore = (p, o) => 1 / (1 + Math.pow(10, (o - p) / 400));
+function updatedRating(rating, opponent, result, games) { return Math.max(100, Math.round(rating + kFactor(games) * (result - expectedScore(rating, opponent)))); }
+function promotionGatePassed(blundersNewestFirst) {
+  if (blundersNewestFirst.length < 10) return false;
+  const last = blundersNewestFirst.slice(0, 10);
+  return last.reduce((a, b) => a + b, 0) / 10 < 1;
+}
+
+/* ---------------- Move judging ---------------- */
+const DROP = { inaccuracy: 7, mistake: 14, blunder: 22 };
+function winChance(s) {
+  if (s.mate != null) return s.mate > 0 ? 100 : 0;
+  const c = clamp(s.cp, -1000, 1000);
+  return 50 + 50 * (2 / (1 + Math.exp(-0.00368208 * c)) - 1);
+}
+const flipScore = (s) => (s.mate != null ? { mate: -s.mate } : { cp: -s.cp });
+function judgeMove(before, after) {
+  const drop = winChance(before) - winChance(after);
+  if (drop >= DROP.blunder) return "blunder";
+  if (drop >= DROP.mistake) return "mistake";
+  if (drop >= DROP.inaccuracy) return "inaccuracy";
+  return null;
+}
+const SEV_SYMBOL = { inaccuracy: "?!", mistake: "?", blunder: "??" };
+
+/* ---------------- UCI ---------------- */
+function parseInfo(line) {
+  if (!line.startsWith("info ")) return null;
+  const t = line.split(/\s+/);
+  let depth = 0, multipv = 1, score = null, pv = [];
+  for (let i = 1; i < t.length; i++) {
+    if (t[i] === "depth") depth = +t[++i] || 0;
+    else if (t[i] === "multipv") multipv = +t[++i] || 1;
+    else if (t[i] === "score") {
+      const kind = t[i + 1], v = parseInt(t[i + 2], 10) || 0;
+      score = kind === "mate" ? { mate: v } : { cp: v };
+      i += 2;
+      if (t[i + 1] === "lowerbound" || t[i + 1] === "upperbound") i++;
+    } else if (t[i] === "pv") { pv = t.slice(i + 1); break; }
+  }
+  if (!score || !pv.length) return null;
+  return { multipv, depth, score, moves: pv };
+}
+function parseBestMove(line) {
+  const t = line.split(/\s+/);
+  return t[1] && t[1] !== "(none)" ? t[1] : null;
+}
+
+/* ---------------- Engine (Stockfish in the browser) ---------------- */
+/* The engine runs in a background worker. First choice is engine-worker.js
+   next to this page (cached for offline use by the service worker); then a
+   blob worker; last, the main thread. */
+function workerIO(fromFile) {
+  return new Promise((resolve, reject) => {
+    let w;
+    try {
+      if (fromFile) w = new Worker("engine-worker.js");
+      else {
+        const blob = new Blob(["importScripts(" + JSON.stringify(SF_URL) + ");"], { type: "text/javascript" });
+        w = new Worker(URL.createObjectURL(blob));
+      }
+    } catch (e) { reject(e); return; }
+    let handler = () => {};
+    const timer = setTimeout(() => { w.terminate(); reject(new Error("Engine took too long to start")); }, 25000);
+    w.onerror = (e) => { clearTimeout(timer); w.terminate(); reject(new Error(e.message || "Engine failed to load")); };
+    w.onmessage = (e) => {
+      const line = String(e.data);
+      if (line.includes("uciok")) {
+        clearTimeout(timer);
+        w.onmessage = (ev) => handler(String(ev.data));
+        resolve({ post: (m) => w.postMessage(m), setHandler: (f) => { handler = f; } });
+      }
+    };
+    w.postMessage("uci");
+  });
+}
+function mainThreadIO() {
+  return new Promise((resolve, reject) => {
+    const go = () => {
+      if (typeof window.STOCKFISH !== "function") { reject(new Error("Engine script did not load")); return; }
+      const sf = window.STOCKFISH();
+      let handler = () => {};
+      const timer = setTimeout(() => reject(new Error("Engine took too long to start")), 25000);
+      sf.onmessage = (e) => {
+        const line = typeof e === "string" ? e : String(e && e.data);
+        if (line.includes("uciok")) {
+          clearTimeout(timer);
+          sf.onmessage = (ev) => handler(typeof ev === "string" ? ev : String(ev && ev.data));
+          resolve({ post: (m) => sf.postMessage(m), setHandler: (f) => { handler = f; } });
+        }
+      };
+      sf.postMessage("uci");
+    };
+    if (typeof window.STOCKFISH === "function") return go();
+    const s = document.createElement("script");
+    s.src = SF_URL;
+    s.onload = go;
+    s.onerror = () => reject(new Error("Couldn't download the engine. Check your internet connection."));
+    document.head.appendChild(s);
+  });
+}
+class Engine {
+  constructor(io) {
+    this.io = io;
+    this.cur = null;
+    this.readyRes = null;
+    this.q = Promise.resolve();
+    io.setHandler((raw) => this._onLine(raw));
+  }
+  static start() {
+    if (!Engine._p) {
+      Engine._p = workerIO(true).catch(() => workerIO(false)).catch(() => mainThreadIO()).then((io) => new Engine(io));
+      Engine._p.catch(() => { Engine._p = null; });
+    }
+    return Engine._p;
+  }
+  _onLine(raw) {
+    for (const part of String(raw).split("\n")) {
+      const l = part.trim();
+      if (!l) continue;
+      if (l === "readyok") { const r = this.readyRes; this.readyRes = null; if (r) r(); continue; }
+      const s = this.cur;
+      if (!s) continue;
+      const info = parseInfo(l);
+      if (info) { s.lines.set(info.multipv, info); continue; }
+      if (l.startsWith("bestmove")) {
+        this.cur = null;
+        const lines = [...s.lines.values()].sort((a, b) => a.multipv - b.multipv);
+        s.done({ lines, best: parseBestMove(l) });
+      }
+    }
+  }
+  _ready() {
+    return new Promise((r) => {
+      this.readyRes = r;
+      this.io.post("isready");
+      setTimeout(() => { if (this.readyRes === r) { this.readyRes = null; r(); } }, 4000);
+    });
+  }
+  search({ fen, movetime, depth, multipv = 1, skill = 20 }) {
+    const run = async () => {
+      this.io.post("setoption name MultiPV value " + multipv);
+      this.io.post("setoption name Skill Level value " + skill);
+      await this._ready();
+      return new Promise((done) => {
+        const s = { lines: new Map(), done };
+        this.cur = s;
+        const guard = setTimeout(() => {
+          if (this.cur === s) { this.io.post("stop"); }
+        }, (movetime || 3000) + 6000);
+        s.done = (res) => { clearTimeout(guard); done(res); };
+        this.io.post("position fen " + fen);
+        this.io.post(depth ? "go depth " + depth : "go movetime " + (movetime || 500));
+      });
+    };
+    const p = this.q.then(run);
+    this.q = p.catch(() => {});
+    return p;
+  }
+  judge(fen) { return this.search({ fen, movetime: 650, multipv: 1, skill: 20 }); }
+  newGame() { this.io.post("ucinewgame"); }
+}
+
+/* ---------------- Bots ---------------- */
+const BOTS = [
+  { id: "kemi", name: "Kemi", rating: 400, personality: "Just learning, like you" },
+  { id: "tobi", name: "Tobi", rating: 600, personality: "Loves to grab pawns" },
+  { id: "ada", name: "Ada", rating: 800, personality: "Solid and patient" },
+  { id: "tunde", name: "Tunde", rating: 1000, personality: "Attacks your king early" },
+  { id: "zara", name: "Zara", rating: 1200, personality: "Sets little traps" },
+  { id: "emeka", name: "Emeka", rating: 1400, personality: "Plays the long game" },
+  { id: "nneka", name: "Nneka", rating: 1600, personality: "Sharp tactician" },
+  { id: "obi", name: "Obi", rating: 1800, personality: "Squeezes every endgame" },
+  { id: "sage", name: "Sage", rating: 2200, personality: "The coach, at full focus" },
+];
+const matchBot = (rating) => BOTS.reduce((a, b) => (Math.abs(a.rating - rating) <= Math.abs(b.rating - rating) ? a : b));
+function weakProfile(rating) {
+  if (rating <= 400) return { depth: 1, skill: 0, slip: 0.6, blunder: 0.2 };
+  if (rating <= 600) return { depth: 2, skill: 0, slip: 0.45, blunder: 0.12 };
+  if (rating <= 800) return { depth: 3, skill: 1, slip: 0.35, blunder: 0.07 };
+  if (rating <= 1000) return { depth: 4, skill: 3, slip: 0.25, blunder: 0.04 };
+  return { depth: 6, skill: 5, slip: 0.15, blunder: 0.02 };
+}
+async function chooseBotMove(engine, bot, fen) {
+  if (bot.rating >= 1300) {
+    const skill = clamp(Math.round((bot.rating - 1200) / 50), 3, 20);
+    const a = await engine.search({ fen, movetime: 300 + Math.floor(Math.random() * 450), skill });
+    return a.best;
+  }
+  const p = weakProfile(bot.rating);
+  const a = await engine.search({ fen, depth: p.depth, multipv: 5, skill: p.skill });
+  const lines = a.lines;
+  if (!lines.length) return a.best;
+  const best = lines[0];
+  if (best.score.mate != null && best.score.mate > 0) return best.moves[0];
+  const roll = Math.random();
+  if (roll < p.blunder && lines.length > 1) return lines[lines.length - 1].moves[0];
+  if (roll < p.blunder + p.slip && lines.length > 1) {
+    const alts = lines.slice(1);
+    const weights = alts.map((_, i) => alts.length - i);
+    let pick = Math.random() * weights.reduce((x, y) => x + y, 0);
+    for (let i = 0; i < alts.length; i++) { pick -= weights[i]; if (pick < 0) return alts[i].moves[0]; }
+  }
+  return best.moves[0] || a.best;
+}
+
+/* ---------------- Board model (chess.js underneath) ---------------- */
+const VALUE = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+const NOUN = { p: "pawn", n: "knight", b: "bishop", r: "rook", q: "queen", k: "king" };
+const opp = (s) => (s === "w" ? "b" : "w");
+const fileOf = (sq) => sq.charCodeAt(0) - 97;
+const rankOf = (sq) => sq.charCodeAt(1) - 49;
+const sqAt = (f, r) => String.fromCharCode(97 + f) + (r + 1);
+const onBoard = (f, r) => f >= 0 && f < 8 && r >= 0 && r < 8;
+const uciFrom = (u) => u.slice(0, 2);
+const uciTo = (u) => u.slice(2, 4);
+
+class Pos {
+  constructor(fen) { this.g = new Chess(fen); this.fen = this.g.fen(); this.turn = this.g.turn(); this._pieces = null; }
+  static initial() { return new Pos(START_FEN); }
+  get fullmoves() { return parseInt(this.fen.split(" ")[5], 10) || 1; }
+  get halfmoves() { return parseInt(this.fen.split(" ")[4], 10) || 0; }
+  pieces() {
+    if (this._pieces) return this._pieces;
+    const out = {}, b = this.g.board();
+    for (let r = 0; r < 8; r++) for (let f = 0; f < 8; f++) { const p = b[r][f]; if (p) out[sqAt(f, 7 - r)] = { side: p.color, kind: p.type }; }
+    return (this._pieces = out);
+  }
+  pieceAt(sq) { return this.pieces()[sq] || null; }
+  _m(uci) { return { from: uciFrom(uci), to: uciTo(uci), promotion: uci[4] || "q" }; }
+  play(uci) { const g = new Chess(this.fen); if (!g.move(this._m(uci))) throw new Error("Illegal move " + uci); return new Pos(g.fen()); }
+  san(uci) { const g = new Chess(this.fen); const m = g.move(this._m(uci)); if (!m) throw new Error("Illegal move " + uci); return m.san; }
+  legal() { return this.g.moves({ verbose: true }); }
+  get isCheck() { return this.g.in_check(); }
+  get isCheckmate() { return this.g.in_checkmate(); }
+  get isStalemate() { return this.g.in_stalemate(); }
+  get isInsufficient() { return this.g.insufficient_material(); }
+  kingSquare(side) { for (const [sq, p] of Object.entries(this.pieces())) if (p.kind === "k" && p.side === side) return sq; return null; }
+  attackers(square, by) {
+    const out = [];
+    for (const [sq, p] of Object.entries(this.pieces())) if (p.side === by && attacksFrom(this, sq).includes(square)) out.push(sq);
+    return out;
+  }
+}
+function attacksFrom(b, from) {
+  const p = b.pieceAt(from);
+  if (!p) return [];
+  const f = fileOf(from), r = rankOf(from), out = [];
+  const step = (df, dr) => { if (onBoard(f + df, r + dr)) out.push(sqAt(f + df, r + dr)); };
+  const ray = (df, dr) => { let nf = f + df, nr = r + dr; while (onBoard(nf, nr)) { const s = sqAt(nf, nr); out.push(s); if (b.pieceAt(s)) break; nf += df; nr += dr; } };
+  const D = [[1, 1], [1, -1], [-1, 1], [-1, -1]], S = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  switch (p.kind) {
+    case "p": { const d = p.side === "w" ? 1 : -1; step(-1, d); step(1, d); break; }
+    case "n": for (const [a, c] of [[1, 2], [2, 1], [2, -1], [1, -2], [-1, -2], [-2, -1], [-2, 1], [-1, 2]]) step(a, c); break;
+    case "k": for (let a = -1; a <= 1; a++) for (let c = -1; c <= 1; c++) if (a || c) step(a, c); break;
+    case "b": for (const [a, c] of D) ray(a, c); break;
+    case "r": for (const [a, c] of S) ray(a, c); break;
+    case "q": for (const [a, c] of [...D, ...S]) ray(a, c); break;
+  }
+  return out;
+}
+const material = (b, side) => Object.values(b.pieces()).filter((p) => p.side === side).reduce((s, p) => s + VALUE[p.kind], 0);
+const balance = (b, side) => material(b, side) - material(b, opp(side));
+
+/* Pieces of [victim] that can be won: attacked and undefended, or attacked
+   by something cheaper. A king only counts as an attacker on undefended
+   pieces. */
+function threatenedSquares(b, victim) {
+  const them = opp(victim), out = [];
+  for (const [sq, p] of Object.entries(b.pieces())) {
+    if (p.side !== victim || p.kind === "k") continue;
+    const defenders = b.attackers(sq, victim);
+    const attackers = b.attackers(sq, them).filter((s) => b.pieceAt(s).kind !== "k" || defenders.length === 0);
+    if (!attackers.length) continue;
+    const cheapest = Math.min(...attackers.map((s) => (b.pieceAt(s).kind === "k" ? 100 : VALUE[b.pieceAt(s).kind])));
+    if (!defenders.length || cheapest < VALUE[p.kind]) out.push(sq);
+  }
+  return out;
+}
+/* Threats that the opponent's last move created (not old ones). */
+function newThreats(before, after, victim) {
+  const old = new Set(threatenedSquares(before, victim));
+  return threatenedSquares(after, victim).filter((sq) => !old.has(sq));
+}
+
+/* ---------------- Mistake detectors ---------------- */
+const MT_LABEL = {
+  hungPiece: "Hung a piece", movedIntoCapture: "Moved into capture", ignoredThreat: "Ignored a threat",
+  allowedFork: "Allowed a fork", pin: "Walked into a pin", skewer: "Walked into a skewer",
+  allowedMate: "Allowed checkmate", backRank: "Back-rank weakness", missedWin: "Missed a win",
+  badTrade: "Bad trade", earlyQueen: "Early queen", kingInCentre: "King left in the centre",
+  weakenedShelter: "Weakened king shelter", stalemate: "Stalemate blunder", generic: "Positional slip",
+};
+function playLine(start, moves, max) { const out = []; let b = start; for (const m of moves.slice(0, max)) { try { b = b.play(m); out.push(b); } catch (e) { break; } } return out; }
+function sanLine(start, moves, max) { const out = []; let b = start; for (const m of moves.slice(0, max)) { try { out.push(b.san(m)); b = b.play(m); } catch (e) { break; } } return out; }
+const rankVal = (k) => (k === "k" ? 100 : VALUE[k]);
+
+function findPinOrSkewer(b, from, victim) {
+  const p = b.pieceAt(from);
+  if (!p || !["b", "r", "q"].includes(p.kind)) return null;
+  const D = [[1, 1], [1, -1], [-1, 1], [-1, -1]], S = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  const dirs = p.kind === "b" ? D : p.kind === "r" ? S : [...D, ...S];
+  for (const [df, dr] of dirs) {
+    let f = fileOf(from) + df, r = rankOf(from) + dr, first = null, firstSq = null;
+    while (onBoard(f, r)) {
+      const s = sqAt(f, r), q = b.pieceAt(s);
+      if (q) {
+        if (q.side !== victim) break;
+        if (!first) { first = q; firstSq = s; }
+        else {
+          const fv = rankVal(first.kind), bv = rankVal(q.kind);
+          if (bv > fv) return { square: firstSq, front: first.kind, back: q.kind, skewer: false };
+          if (fv > bv) return { square: firstSq, front: first.kind, back: q.kind, skewer: true };
+          break;
+        }
+      }
+      f += df; r += dr;
+    }
+  }
+  return null;
+}
+
+function detectMistake({ before, move, after, severity, bestLine, replyLine }) {
+  const me = before.turn, them = opp(me);
+  const yourSan = before.san(move);
+  const bestUci = bestLine && bestLine.moves[0];
+  const bestSan = bestUci ? safeSan(before, bestUci) : null;
+  const replyUci = replyLine && replyLine.moves[0];
+  const replySan = replyUci ? safeSan(after, replyUci) : null;
+  const replyBoards = replyLine ? playLine(after, replyLine.moves, 6) : [];
+  const end = replyBoards.length ? replyBoards[replyBoards.length - 1] : after;
+  const lost = balance(before, me) - balance(end, me);
+  const line = replyLine ? sanLine(after, replyLine.moves, 5) : [];
+  const moved = before.pieceAt(uciFrom(move));
+  const captured = before.pieceAt(uciTo(move));
+  const report = (type, extra = {}) => withReason(before, {
+    type, severity, yourSan, yourUci: move, bestUci, bestSan, replyUci, replySan,
+    materialLost: Math.max(0, lost), materialWon: 0, lineSan: line, ...extra,
+  });
+
+  if (after.isStalemate && bestLine && winChance(bestLine.score) > 70) return report("stalemate");
+
+  const rs = replyLine && replyLine.score;
+  if (rs && rs.mate != null && rs.mate > 0) {
+    const all = playLine(after, replyLine.moves, 40);
+    const last = all[all.length - 1];
+    const mateMove = all.length ? replyLine.moves[all.length - 1] : null;
+    const kingSq = after.kingSquare(me), home = me === "w" ? 0 : 7;
+    const backRank = !!(last && last.isCheckmate && kingSq && rankOf(kingSq) === home && mateMove && rankOf(uciTo(mateMove)) === home);
+    return report(backRank ? "backRank" : "allowedMate", { mateIn: rs.mate });
+  }
+
+  if (lost <= 1 && bestUci) {
+    const bs = bestLine.score;
+    if (bs.mate != null && bs.mate > 0) return report("missedWin", { mateIn: bs.mate });
+    const bb = playLine(before, bestLine.moves, 6);
+    if (bb.length) {
+      const gain = balance(bb[bb.length - 1], me) - balance(before, me);
+      if (gain >= 3) return report("missedWin", { materialWon: gain });
+    }
+  }
+
+  if (moved && captured && replyUci && uciTo(replyUci) === uciTo(move) && VALUE[moved.kind] - VALUE[captured.kind] >= 2 && lost >= 2) {
+    return report("badTrade", { piece: moved.kind, piece2: captured.kind });
+  }
+
+  if (replyUci && lost >= 2) {
+    const sq = uciTo(replyUci), target = after.pieceAt(sq);
+    if (target && target.side === me) {
+      if (sq === uciTo(move)) return report("movedIntoCapture", { piece: target.kind, square: sq });
+      const was = before.pieceAt(sq);
+      const threatened = !!(was && was.side === me && before.attackers(sq, them).length);
+      return report(threatened ? "ignoredThreat" : "hungPiece", { piece: target.kind, square: sq });
+    }
+    const ar = replyBoards[0];
+    if (ar) {
+      const hit = attacksFrom(ar, sq)
+        .map((s) => [s, ar.pieceAt(s)])
+        .filter(([, p]) => p && p.side === me && (p.kind === "k" || VALUE[p.kind] >= 3))
+        .sort((a, b) => rankVal(b[1].kind) - rankVal(a[1].kind));
+      if (hit.length >= 2) return report("allowedFork", { piece: hit[0][1].kind, square: hit[0][0], piece2: hit[1][1].kind });
+      const pin = findPinOrSkewer(ar, sq, me);
+      if (pin) return report(pin.skewer ? "skewer" : "pin", { piece: pin.front, square: pin.square, piece2: pin.back });
+    }
+  }
+
+  if (moved && moved.kind === "q" && before.fullmoves <= 6) return report("earlyQueen", { piece: "q" });
+
+  const king = after.kingSquare(me);
+  if (king) {
+    const home = me === "w" ? 0 : 7, kf = fileOf(king);
+    if (before.fullmoves >= 12 && rankOf(king) === home && kf >= 3 && kf <= 5) return report("kingInCentre");
+    if (moved && moved.kind === "p") {
+      const pf = fileOf(uciFrom(move)), pawnStart = me === "w" ? 1 : 6;
+      if (((kf >= 6 && pf >= 5) || (kf <= 2 && pf <= 2)) && rankOf(uciFrom(move)) === pawnStart && rankOf(king) === home) {
+        return report("weakenedShelter", { piece: "p", square: uciFrom(move) });
+      }
+    }
+  }
+  return report("generic");
+}
+function safeSan(b, uci) { try { return b.san(uci); } catch (e) { return null; } }
+function withReason(before, r) {
+  const best = r.bestUci;
+  if (!best) return r;
+  const me = before.turn;
+  let after;
+  try { after = before.play(best); } catch (e) { return r; }
+  if (after.isCheckmate) { r.betterReason = "it's checkmate"; return r; }
+  if (r.type === "missedWin") { r.betterReason = r.mateIn != null ? "it leads to checkmate" : "it wins material"; return r; }
+  const takes = before.pieceAt(uciTo(best));
+  if (takes && takes.side !== me && VALUE[takes.kind] >= 3) { r.betterReason = "it wins the " + NOUN[takes.kind]; return r; }
+  if (r.square && r.piece) {
+    const own = before.pieceAt(r.square);
+    if (own && own.side === me) {
+      if (uciFrom(best) === r.square) { r.betterReason = "it moves your " + NOUN[r.piece] + " to safety"; return r; }
+      if (after.attackers(r.square, me).length > before.attackers(r.square, me).length) { r.betterReason = "it guards your " + NOUN[r.piece]; return r; }
+    }
+  }
+  if (r.type === "allowedMate" || r.type === "backRank") { r.betterReason = "it keeps your king safe"; return r; }
+  if (after.isCheck) r.betterReason = "it gives check and keeps the pressure on";
+  return r;
+}
+
+/* ---------------- The coach's words ---------------- */
+function whyLine(r, oppName) {
+  const p = r.piece ? NOUN[r.piece] : "piece", p2 = r.piece2 ? NOUN[r.piece2] : "piece";
+  const sq = r.square || "", reply = r.replySan || "a strong reply", line = r.lineSan.slice(0, 3).join(" "), lost = r.materialLost;
+  switch (r.type) {
+    case "hungPiece": return `Your ${p} on ${sq} doesn't have enough defenders. ${oppName} can take it with ${reply}.`;
+    case "movedIntoCapture": return `Your ${p} went to ${sq}, where ${oppName} can win it with ${reply}.`;
+    case "ignoredThreat": return `${oppName} was already attacking your ${p} on ${sq}. Your move didn't deal with it, so ${reply} wins it.`;
+    case "allowedFork": return `${oppName} can play ${reply}, attacking your ${p} and your ${p2} at the same time. You can only save one.`;
+    case "pin": return `After ${reply}, your ${p} is pinned to your ${p2}. If the ${p} moves, your ${p2} is lost.`;
+    case "skewer": return `After ${reply}, your ${p} has to move, and your ${p2} behind it is lost.`;
+    case "allowedMate": return r.mateIn === 1 ? `This allows checkmate: ${reply}. Always check your king's escape squares.` : `This lets ${oppName} force checkmate: ${line}… Watch your king's safety.`;
+    case "backRank": return `Your king is trapped on the back rank behind its own pawns. ${oppName} can checkmate with ${line}.`;
+    case "missedWin": return r.mateIn != null ? "You had a checkmate here! Before every move, look at checks first." : `You had a move that wins ${r.materialWon} points of material. Look for checks, captures and threats.`;
+    case "badTrade": return `You gave your ${p} (${VALUE[r.piece]}) for a ${p2} (${VALUE[r.piece2]}). After ${reply} you lose ${VALUE[r.piece] - VALUE[r.piece2]} points.`;
+    case "earlyQueen": return `Your queen came out too early. ${oppName} can chase it with ${reply} and develop at the same time.`;
+    case "kingInCentre": return `Your king is still in the centre with open lines. ${oppName} can go after it with ${reply}.`;
+    case "weakenedShelter": return `That pawn move opens a path to your king. ${oppName} can use it with ${reply}.`;
+    case "stalemate": return `Careful, that's stalemate! ${oppName} has no legal moves, so the game is a draw even though you were winning.`;
+    default: return lost >= 1 ? `After ${reply}, ${oppName} comes out about ${lost} ${lost === 1 ? "point" : "points"} ahead.` : `This gives ${oppName} a much better position after ${reply}.`;
+  }
+}
+function coachSays(r, rank, oppName, attempt) {
+  if (rank.depth === "wrong") return { wrong: "Wrong." };
+  if (attempt >= 2 && !givesBetterMove(rank)) return { wrong: "Still wrong. Look again." };
+  const sev = { blunder: "That's a blunder.", mistake: "That's a mistake.", inaccuracy: "That's an inaccuracy." }[r.severity];
+  let better = null;
+  if (givesBetterMove(rank) && r.bestSan) better = r.betterReason ? `Play ${r.bestSan} instead. ${cap(r.betterReason)}.` : `${r.bestSan} was the strongest move here.`;
+  return {
+    wrong: attempt >= 2 ? "Still not right. " + sev : sev,
+    why: whyLine(r, oppName),
+    better,
+    showBest: givesBetterMove(rank),
+    showThreat: r.type !== "missedWin" && r.type !== "stalemate",
+  };
+}
+const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/* ---------------- Profile (saved for you) ---------------- */
+const LS_KEY = "dee_chess_profile_v1";
+const PUZZLE_STEPS = [1, 3, 7]; // days until a puzzle comes back, per stage
+function dayStart(plusDays) { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), n.getDate() + plusDays).getTime(); }
+const Profile = {
+  data: null,
+  db: null,
+  uid: null,
+  saving: false,
+  dirty: false,
+  fresh() { return { rating: STARTING_RATING, rankId: "initiate", games: 0, placementLeft: PLACEMENT_BOTS.length, streak: 0, lastPlayed: null, history: [], puzzles: [], threats: { asked: 0, spotted: 0 }, sound: true, updatedAt: 0 }; },
+  /* Puzzles from your own mistakes, brought back after 1, 3 and 7 days. */
+  addPuzzle(p) {
+    const d = this.data;
+    if (d.puzzles.some((x) => x.fen === p.fen)) return;
+    d.puzzles.unshift(Object.assign({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), created: Date.now(), stage: 0, due: dayStart(1), solved: 0, mastered: false }, p));
+    d.puzzles = d.puzzles.slice(0, 200);
+    this.save();
+  },
+  duePuzzles() { const now = Date.now(); return this.data.puzzles.filter((p) => !p.mastered && p.due <= now); },
+  openPuzzles() { return this.data.puzzles.filter((p) => !p.mastered); },
+  gradePuzzle(id, firstTry) {
+    const p = this.data.puzzles.find((x) => x.id === id);
+    if (!p) return;
+    if (firstTry) { p.solved++; p.stage++; if (p.stage >= PUZZLE_STEPS.length) p.mastered = true; else p.due = dayStart(PUZZLE_STEPS[p.stage]); }
+    else { p.stage = 0; p.due = dayStart(1); }
+    this.save();
+  },
+  noteThreat(spotted) { const t = this.data.threats; t.asked++; if (spotted) t.spotted++; this.save(); },
+  blundersPerGame(n = 10) {
+    const g = this.data.history.filter((x) => x.rated !== undefined).slice(0, n);
+    if (!g.length) return null;
+    return g.reduce((s, x) => s + (x.preCoachBlunders || 0), 0) / g.length;
+  },
+  loadLocal() {
+    try { const raw = localStorage.getItem(LS_KEY); if (raw) this.data = Object.assign(this.fresh(), JSON.parse(raw)); } catch (e) {}
+    if (!this.data) this.data = this.fresh();
+  },
+  async connect(onChange) {
+    try {
+      if (!window.claude || typeof window.claude.use !== "function") return;
+      const [db, user] = await Promise.all([window.claude.use("db"), window.claude.use("user")]);
+      if (!db || !user) return;
+      const uid = await user.id();
+      if (!uid) return;
+      this.db = db; this.uid = uid;
+      const snap = await db.doc("data/users/" + uid + "/profile").get();
+      if (snap.exists) {
+        const remote = snap.data();
+        if (remote && remote.profile && (remote.updatedAt || 0) > (this.data.updatedAt || 0)) {
+          this.data = Object.assign(this.fresh(), remote.profile, { updatedAt: remote.updatedAt });
+          this.saveLocal();
+          onChange();
+        } else if ((this.data.updatedAt || 0) > (remote.updatedAt || 0)) {
+          this.pushRemote();
+        }
+      } else if (this.data.updatedAt) {
+        this.pushRemote();
+      }
+    } catch (e) { /* stays on this device only */ }
+  },
+  saveLocal() { try { localStorage.setItem(LS_KEY, JSON.stringify(this.data)); } catch (e) {} },
+  async pushRemote() {
+    if (!this.db || !this.uid) return;
+    if (this.saving) { this.dirty = true; return; }
+    this.saving = true;
+    try {
+      const body = JSON.parse(JSON.stringify(this.data));
+      body.history = body.history.slice(0, 60);
+      await this.db.doc("data/users/" + this.uid + "/profile").set({ profile: body, updatedAt: this.data.updatedAt });
+    } catch (e) { /* keep local copy */ }
+    this.saving = false;
+    if (this.dirty) { this.dirty = false; this.pushRemote(); }
+  },
+  save() { this.data.updatedAt = Date.now(); this.saveLocal(); this.pushRemote(); },
+  get rank() { return rankById(this.data.rankId); },
+  get inPlacement() { return this.data.placementLeft > 0; },
+  nextOpponent() {
+    const d = this.data;
+    if (d.placementLeft > 0) { const target = PLACEMENT_BOTS[PLACEMENT_BOTS.length - d.placementLeft]; return BOTS.find((b) => b.rating === target) || matchBot(target); }
+    return matchBot(d.rating);
+  },
+  record({ bot, result, rated, mistakes, preCoachBlunders, sans }) {
+    const d = this.data, before = d.rating, rankBefore = this.rank;
+    if (rated) { d.rating = updatedRating(d.rating, bot.rating, result, d.games); d.games++; }
+    d.history.unshift({ bot: bot.name, botRating: bot.rating, result, rated, before, after: d.rating, at: Date.now(), mistakes, preCoachBlunders, sans });
+    d.history = d.history.slice(0, 100);
+    if (rated) {
+      if (d.placementLeft > 0) { d.placementLeft--; d.rankId = rankForRating(d.rating).id; }
+      else {
+        const gate = promotionGatePassed(d.history.filter((g) => g.rated).map((g) => g.preCoachBlunders));
+        d.rankId = resolveRank(rankBefore, d.rating, gate).id;
+      }
+    }
+    const now = new Date(), today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    if (!d.lastPlayed) d.streak = 1;
+    else {
+      const lp = new Date(d.lastPlayed), last = new Date(lp.getFullYear(), lp.getMonth(), lp.getDate()).getTime();
+      const gap = Math.round((today - last) / 864e5);
+      if (gap === 1) d.streak++;
+      else if (gap > 1) d.streak = 1;
+    }
+    d.lastPlayed = now.getTime();
+    this.save();
+    return { before, after: d.rating, rankBefore, rankAfter: this.rank };
+  },
+};
+
+/* ---------------- Game controller ---------------- */
+class Game {
+  constructor({ engine, bot, rank, you, onChange }) {
+    Object.assign(this, { engine, bot, rank, you, onChange });
+    this.position = Pos.initial();
+    this.phase = "starting";
+    this.end = null;
+    this.sans = [];
+    this.flags = [];
+    this.lastMove = null;
+    this.pausedMove = null;
+    this.pausedPosition = null;
+    this.report = null;
+    this.message = null;
+    this.attempt = 0;
+    this.mistakes = [];
+    this.preCoachBlunders = 0;
+    this.bestLine = null;
+    this.seen = new Map();
+    this.alive = true;
+    this.puzzles = [];
+    this.quiz = null;       // { squares, attempts }
+    this.note = null;       // { text, tone } shown after a quiz
+    this.hint = [];         // squares ringed after a quiz answer
+    this.lastQuizPly = -99;
+    this.remember(this.position);
+  }
+  emit() { if (this.alive) this.onChange(this); }
+  get result() { return this.end === "youMated" ? 1 : this.end === "botMated" || this.end === "resigned" ? 0 : 0.5; }
+  async start() {
+    this.engine.newGame();
+    if (this.position.turn === this.you) await this.prepareYourTurn(); else await this.botMove();
+  }
+  async playYourMove(uci) {
+    if (this.phase !== "yourTurn") return;
+    const before = this.position;
+    let after;
+    try { after = before.play(uci); } catch (e) { return; }
+    this.note = null;
+    this.hint = [];
+    this.phase = "judging";
+    this.pausedPosition = after;
+    this.pausedMove = uci;
+    this.emit();
+    if (after.isCheckmate) { this.commit(before, uci, after); return this.finish("youMated"); }
+
+    const reply = await this.engine.judge(after.fen);
+    if (!this.alive) return;
+    const replyLine = reply.lines[0] || null;
+    const bestLine = this.bestLine;
+    let severity = null;
+    if (replyLine && bestLine) severity = judgeMove(bestLine.score, flipScore(replyLine.score));
+    else if (after.isStalemate && bestLine) severity = judgeMove(bestLine.score, { cp: 0 });
+
+    this.attempt++;
+    const pauses = severity && this.rank.pauses.includes(severity);
+    const givenUp = !givesBetterMove(this.rank) && this.attempt >= 3;
+    if (pauses && !givenUp && bestLine) {
+      const r = detectMistake({ before, move: uci, after, severity, bestLine, replyLine: replyLine || { moves: [], score: { cp: 0 } } });
+      if (this.attempt === 1) {
+        this.mistakes.push(r.type);
+        if (severity === "blunder") this.preCoachBlunders++;
+        const puzzle = { fen: before.fen, solution: bestLine.moves[0], type: r.type, side: this.you, bot: this.bot.name, why: whyLine(r, this.bot.name) };
+        this.puzzles.push(puzzle);
+        if (this.onMistake) this.onMistake(puzzle);
+      }
+      this.report = r;
+      this.message = coachSays(r, this.rank, this.bot.name, this.attempt);
+      this.phase = "paused";
+      buzz([18, 40, 30]);
+      this.emit();
+      return;
+    }
+    if (this.attempt === 1 && severity === "blunder") this.preCoachBlunders++;
+    this.commit(before, uci, after, this.attempt > 1 ? "?" : null);
+    if (this.checkEnd()) return;
+    await this.botMove();
+  }
+  retry() {
+    if (this.phase !== "paused") return;
+    this.pausedMove = null; this.pausedPosition = null; this.message = null;
+    this.phase = "yourTurn";
+    this.emit();
+  }
+  async playBetter() {
+    const best = this.report && this.report.bestUci;
+    if (this.phase !== "paused" || !best || !givesBetterMove(this.rank)) return;
+    this.retry();
+    const before = this.position, after = before.play(best);
+    this.commit(before, best, after);
+    if (this.checkEnd()) return;
+    await this.botMove();
+  }
+  resign() { if (this.phase !== "over") this.finish("resigned"); }
+  async botMove() {
+    this.phase = "botThinking";
+    this.emit();
+    const t0 = Date.now();
+    let move = null;
+    try { move = await chooseBotMove(this.engine, this.bot, this.position.fen); } catch (e) {}
+    if (!this.alive || this.phase === "over") return;
+    if (!move) { const legal = this.position.legal(); if (legal.length) { const m = legal[Math.floor(Math.random() * legal.length)]; move = m.from + m.to + (m.promotion || ""); } }
+    const wait = 450 + Math.random() * 600 - (Date.now() - t0);
+    if (wait > 0) await sleep(wait);
+    if (!this.alive || this.phase === "over" || !move) return;
+    const before = this.position, after = before.play(move);
+    this.commit(before, move, after);
+    sound.move(!!before.pieceAt(uciTo(move)));
+    if (this.checkEnd()) return;
+    const threats = after.isCheck ? [] : newThreats(before, after, this.you);
+    const chance = { full: 0.5, why: 0.3, wrong: 0 }[this.rank.depth];
+    const ply = this.sans.length;
+    const ask = threats.length >= 1 && threats.length <= 2 && ply - this.lastQuizPly >= 6 && Math.random() < chance;
+    await this.prepareYourTurn();
+    if (ask && this.alive && this.phase === "yourTurn") {
+      this.lastQuizPly = ply;
+      this.quiz = { squares: threats, attempts: 0 };
+      this.phase = "quiz";
+      buzz(12);
+      this.emit();
+    }
+  }
+  async prepareYourTurn() {
+    const a = await this.engine.judge(this.position.fen);
+    if (!this.alive) return;
+    this.bestLine = a.lines[0] || null;
+    this.attempt = 0; this.report = null; this.message = null;
+    this.phase = "yourTurn";
+    this.emit();
+  }
+  /* "What's the threat?": Dee taps the piece in danger. */
+  answerQuiz(sq) {
+    const q = this.quiz;
+    if (this.phase !== "quiz" || !q) return;
+    const p = this.position.pieceAt(sq);
+    if (q.squares.includes(sq)) {
+      Profile.noteThreat(q.attempts === 0);
+      this.note = { tone: "good", text: `Yes! ${this.bot.name} is attacking your ${NOUN[p.kind]} on ${sq}. Now deal with it.` };
+      this.hint = [sq];
+      this.endQuiz();
+      return;
+    }
+    q.attempts++;
+    if (q.attempts >= 2) { this.revealQuiz(); return; }
+    this.note = { tone: "bad", text: p && p.side === this.you ? `Your ${NOUN[p.kind]} on ${sq} is safe. Look at what ${this.bot.name}'s last move attacks.` : `Tap one of your own pieces. Look at what ${this.bot.name}'s last move attacks.` };
+    this.emit();
+  }
+  revealQuiz() {
+    const q = this.quiz;
+    if (this.phase !== "quiz" || !q) return;
+    Profile.noteThreat(false);
+    const sq = q.squares[0], p = this.position.pieceAt(sq);
+    this.note = { tone: "bad", text: `${this.bot.name} is attacking your ${NOUN[p.kind]} on ${sq}. Spotting threats like this is the habit that stops blunders.` };
+    this.hint = q.squares.slice();
+    this.endQuiz();
+  }
+  endQuiz() { this.quiz = null; this.phase = "yourTurn"; this.emit(); }
+  commit(before, uci, after, flag = null) {
+    this.sans.push(before.san(uci));
+    this.flags.push(flag);
+    this.position = after;
+    this.lastMove = uci;
+    this.pausedMove = null; this.pausedPosition = null;
+    this.remember(after);
+  }
+  key(b) { return b.fen.split(" ").slice(0, 4).join(" "); }
+  remember(b) { const k = this.key(b); this.seen.set(k, (this.seen.get(k) || 0) + 1); }
+  checkEnd() {
+    const p = this.position;
+    let e = null;
+    if (p.isCheckmate) e = p.turn === this.you ? "botMated" : "youMated";
+    else if (p.isStalemate) e = "stalemate";
+    else if (p.isInsufficient) e = "insufficient";
+    else if ((this.seen.get(this.key(p)) || 0) >= 3) e = "repetition";
+    else if (p.halfmoves >= 100) e = "fiftyMoves";
+    if (!e) return false;
+    this.finish(e);
+    return true;
+  }
+  finish(e) { this.end = e; this.phase = "over"; this.message = null; this.emit(); }
+}
+
+/* ---------------- Feedback: haptics + sound ---------------- */
+function buzz(p) { try { if (navigator.vibrate) navigator.vibrate(p); } catch (e) {} }
+const sound = {
+  ctx: null,
+  ensure() { if (!this.ctx) { try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} } return this.ctx; },
+  move(capture) {
+    if (!Profile.data.sound) return;
+    const ctx = this.ensure();
+    if (!ctx) return;
+    try {
+      const t = ctx.currentTime, len = 0.06;
+      const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * len), ctx.sampleRate), d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 6);
+      const src = ctx.createBufferSource(); src.buffer = buf;
+      const bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = capture ? 900 : 1500; bp.Q.value = 1.4;
+      const g = ctx.createGain(); g.gain.setValueAtTime(capture ? 0.9 : 0.6, t);
+      src.connect(bp).connect(g).connect(ctx.destination); src.start(t);
+    } catch (e) {}
+  },
+};
+
+/* ---------------- Pieces ---------------- */
+const pieceSvg = (side, kind, cls = "") => `<svg viewBox="0 0 1 1" class="${cls}" aria-hidden="true"><use href="#p-${side}${kind}" width="1" height="1"/></svg>`;
+const goldSvg = (kind) => `<svg viewBox="0 0 1 1" aria-hidden="true"><use href="#g-${kind}" width="1" height="1"/></svg>`;
+
+/* ---------------- Board view ---------------- */
+class BoardView {
+  constructor(wrap, { onMove, onTap }) {
+    this.wrap = wrap;
+    this.onMove = onMove;
+    this.onTap = onTap;
+    this.tapMode = false;
+    this.orientation = "w";
+    this.pos = null;
+    this.interactive = false;
+    this.mySide = "w";
+    this.sel = null;
+    this.legalMap = new Map();
+    this.els = new Map();
+    this.drag = null;
+    wrap.innerHTML = `<div class="board"><div class="layer squares"></div><div class="layer hls"></div><div class="layer pieces"></div><svg class="layer overlay" viewBox="0 0 8 8"></svg></div>`;
+    this.board = $(".board", wrap);
+    this.sqLayer = $(".squares", wrap);
+    this.hlLayer = $(".hls", wrap);
+    this.pcLayer = $(".pieces", wrap);
+    this.ov = $(".overlay", wrap);
+    this.board.addEventListener("pointerdown", (e) => this.down(e));
+    window.addEventListener("pointermove", (this._mv = (e) => this.moveDrag(e)));
+    window.addEventListener("pointerup", (this._up = (e) => this.up(e)));
+    window.addEventListener("pointercancel", (this._cn = () => this.cancelDrag()));
+  }
+  destroy() {
+    window.removeEventListener("pointermove", this._mv);
+    window.removeEventListener("pointerup", this._up);
+    window.removeEventListener("pointercancel", this._cn);
+  }
+  xy(sq) { const f = fileOf(sq), r = rankOf(sq); return this.orientation === "w" ? [f, 7 - r] : [7 - f, r]; }
+  sqFromPoint(cx, cy) {
+    const rect = this.board.getBoundingClientRect();
+    const x = Math.floor(((cx - rect.left) / rect.width) * 8), y = Math.floor(((cy - rect.top) / rect.height) * 8);
+    if (x < 0 || x > 7 || y < 0 || y > 7) return null;
+    return this.orientation === "w" ? sqAt(x, 7 - y) : sqAt(7 - x, y);
+  }
+  drawSquares() {
+    let html = "";
+    for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) {
+      const f = this.orientation === "w" ? x : 7 - x, r = this.orientation === "w" ? 7 - y : y;
+      const light = (f + r) % 2 === 1;
+      let c = "";
+      if (x === 0) c += `<span class="coord rk">${r + 1}</span>`;
+      if (y === 7) c += `<span class="coord fl">${String.fromCharCode(97 + f)}</span>`;
+      html += `<div class="sq ${light ? "l" : "d"}">${c}</div>`;
+    }
+    this.sqLayer.innerHTML = html;
+  }
+  setOrientation(o) { this.orientation = o; this.drawSquares(); this.els.forEach((el, sq) => this.place(el, sq)); }
+  place(el, sq) { const [x, y] = this.xy(sq); el.style.transform = `translate(${x * 100}%, ${y * 100}%)`; }
+  render(pos, { animate = true, lastMove = null, interactive = false, mySide = "w", dim = false, shapes = [], tapMode = false } = {}) {
+    const prev = this.pos ? this.pos.pieces() : {};
+    const next = pos.pieces();
+    this.pos = pos;
+    this.interactive = interactive;
+    this.tapMode = tapMode;
+    this.board.classList.toggle("tapmode", tapMode);
+    this.mySide = mySide;
+    if (!interactive) this.sel = null;
+    const code = (p) => (p ? p.side + p.kind : "");
+    const newEls = new Map();
+    const used = new Set();
+    for (const [sq, p] of Object.entries(next)) if (code(prev[sq]) === code(p) && this.els.has(sq)) { newEls.set(sq, this.els.get(sq)); used.add(sq); }
+    for (const [sq, p] of Object.entries(next)) {
+      if (newEls.has(sq)) continue;
+      const c = code(p);
+      let src = null;
+      for (const [s, el] of this.els) if (!used.has(s) && code(prev[s]) === c && code(next[s]) !== c) { src = s; break; }
+      if (src) {
+        const el = this.els.get(src); used.add(src);
+        el.classList.toggle("anim", animate);
+        this.place(el, sq);
+        newEls.set(sq, el);
+      } else {
+        const el = document.createElement("div");
+        el.className = "pc" + (animate ? " fade-in" : "");
+        el.innerHTML = pieceSvg(p.side, p.kind);
+        this.place(el, sq);
+        this.pcLayer.appendChild(el);
+        newEls.set(sq, el);
+      }
+    }
+    for (const [s, el] of this.els) if (!used.has(s) && ![...newEls.values()].includes(el)) el.remove();
+    this.els = newEls;
+    this.lastMove = lastMove;
+    this.board.classList.toggle("dim", dim);
+    this.shapes = shapes;
+    this.legalMap = new Map();
+    if (interactive) for (const m of pos.legal()) { if (!this.legalMap.has(m.from)) this.legalMap.set(m.from, []); this.legalMap.get(m.from).push(m); }
+    this.drawHighlights();
+    this.drawShapes();
+  }
+  drawHighlights() {
+    let html = "";
+    const box = (sq, cls) => { const [x, y] = this.xy(sq); return `<div class="hl ${cls}" style="left:${x * 12.5}%;top:${y * 12.5}%"></div>`; };
+    if (this.lastMove) { html += box(uciFrom(this.lastMove), "last") + box(uciTo(this.lastMove), "last"); }
+    if (this.pos && this.pos.isCheck) { const k = this.pos.kingSquare(this.pos.turn); if (k) html += box(k, "check"); }
+    if (this.sel) {
+      html += box(this.sel, "sel");
+      for (const m of this.legalMap.get(this.sel) || []) html += box(m.to, this.pos.pieceAt(m.to) ? "cap" : "dot");
+    }
+    this.hlLayer.innerHTML = html;
+  }
+  drawShapes() {
+    let svg = "";
+    const c = (sq) => { const [x, y] = this.xy(sq); return [x + 0.5, y + 0.5]; };
+    for (const s of this.shapes) {
+      if (s.type === "ring") { const [x, y] = c(s.sq); svg += `<circle class="ring" cx="${x}" cy="${y}" r="0.44" fill="none" stroke="${s.color}" stroke-width="0.075"/>`; }
+      if (s.type === "arrow") {
+        const [x1, y1] = c(s.from), [x2, y2] = c(s.to);
+        const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy), ux = dx / len, uy = dy / len;
+        const sx = x1 + ux * 0.2, sy = y1 + uy * 0.2, ex = x2 - ux * 0.32, ey = y2 - uy * 0.32;
+        svg += `<line class="arrow" x1="${sx}" y1="${sy}" x2="${ex}" y2="${ey}" stroke="${s.color}" stroke-width="0.17" stroke-linecap="round" stroke-dasharray="8" opacity="0.92" marker-end="url(#ah-${s.marker})"/>`;
+      }
+    }
+    this.ov.innerHTML = svg;
+  }
+  isMine(sq) { const p = this.pos && this.pos.pieceAt(sq); return !!(p && p.side === this.mySide); }
+  down(e) {
+    if (this.tapMode && this.onTap) {
+      const t = this.sqFromPoint(e.clientX, e.clientY);
+      if (t) this.onTap(t);
+      e.preventDefault();
+      return;
+    }
+    if (!this.interactive || !this.pos) return;
+    const sq = this.sqFromPoint(e.clientX, e.clientY);
+    if (!sq) return;
+    sound.ensure();
+    if (this.sel && sq !== this.sel && (this.legalMap.get(this.sel) || []).some((m) => m.to === sq)) { this.tryMove(this.sel, sq); return; }
+    if (this.isMine(sq) && this.legalMap.has(sq)) {
+      const wasSel = this.sel === sq;
+      this.sel = sq;
+      this.drawHighlights();
+      const el = this.els.get(sq);
+      this.drag = { sq, el, x0: e.clientX, y0: e.clientY, moving: false, wasSel, id: e.pointerId };
+      e.preventDefault();
+    } else {
+      this.sel = null;
+      this.drawHighlights();
+    }
+  }
+  moveDrag(e) {
+    const d = this.drag;
+    if (!d || e.pointerId !== d.id) return;
+    if (!d.moving && Math.hypot(e.clientX - d.x0, e.clientY - d.y0) < 6) return;
+    d.moving = true;
+    const rect = this.board.getBoundingClientRect(), size = rect.width / 8;
+    const x = e.clientX - rect.left - size / 2, y = e.clientY - rect.top - size / 2;
+    d.el.classList.add("drag");
+    d.el.classList.remove("anim");
+    d.el.style.transform = `translate(${x}px, ${y}px)`;
+  }
+  up(e) {
+    const d = this.drag;
+    if (!d || e.pointerId !== d.id) return;
+    this.drag = null;
+    d.el.classList.remove("drag");
+    if (!d.moving) {
+      if (d.wasSel) { this.sel = null; this.drawHighlights(); }
+      return;
+    }
+    const to = this.sqFromPoint(e.clientX, e.clientY);
+    if (to && to !== d.sq && (this.legalMap.get(d.sq) || []).some((m) => m.to === to)) {
+      d.el.classList.remove("anim");
+      this.place(d.el, to);
+      this.tryMove(d.sq, to, true);
+    } else {
+      d.el.classList.add("anim");
+      this.place(d.el, d.sq);
+    }
+  }
+  cancelDrag() { const d = this.drag; if (!d) return; this.drag = null; d.el.classList.remove("drag"); d.el.classList.add("anim"); this.place(d.el, d.sq); }
+  tryMove(from, to, dropped = false) {
+    const moves = (this.legalMap.get(from) || []).filter((m) => m.to === to);
+    if (!moves.length) return;
+    this.sel = null;
+    if (moves.some((m) => m.promotion)) { this.askPromotion(from, to, dropped); return; }
+    this.onMove(from + to);
+  }
+  askPromotion(from, to, dropped) {
+    const side = this.mySide;
+    const div = document.createElement("div");
+    div.className = "promo";
+    div.innerHTML = `<div class="row">${["q", "r", "b", "n"].map((k) => `<button data-k="${k}" aria-label="Promote to ${NOUN[k]}">${pieceSvg(side, k)}</button>`).join("")}</div>`;
+    div.addEventListener("click", (e) => {
+      const b = e.target.closest("button");
+      div.remove();
+      if (!b) { const el = this.els.get(from); if (el) { el.classList.add("anim"); this.place(el, from); } this.drawHighlights(); return; }
+      this.onMove(from + to + b.dataset.k);
+    });
+    this.wrap.appendChild(div);
+  }
+}
+
+/* ---------------- UI ---------------- */
+const app = $("#app");
+let currentGame = null;
+let currentBoard = null;
+
+function rankEmblem(rank, progress, size = 104) {
+  const r = 46, C = 2 * Math.PI * r;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 104 104" aria-hidden="true">
+    <circle cx="52" cy="52" r="${r}" fill="none" stroke="var(--slate)" stroke-width="6"/>
+    <circle cx="52" cy="52" r="${r}" fill="none" stroke="url(#goldg)" stroke-width="6" stroke-linecap="round"
+      stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - progress)}" transform="rotate(-90 52 52)" style="transition: stroke-dashoffset 1s ease"/>
+    <use href="#g-${rank.piece}" x="22" y="20" width="60" height="60"/>
+  </svg>`;
+}
+
+function showHome() {
+  teardownGame();
+  const d = Profile.data, rank = Profile.rank, next = nextRank(rank);
+  const style = {
+    full: ["Full help", "On a bad move I pause, explain why, and show you a better move."],
+    why: ["Why only", "On a bad move I pause and explain why. You find the better move."],
+    wrong: ["Silent master", "I only tell you a move was wrong."],
+  }[rank.depth];
+  const results = d.history.slice(0, 6).map((g) => {
+    const [lbl, col] = g.result === 1 ? ["Won", "var(--mint)"] : g.result === 0 ? ["Lost", "var(--coral)"] : ["Draw", "var(--quiet)"];
+    const delta = g.after - g.before;
+    return `<div class="game-row"><span class="res" style="color:${col}">${lbl}</span><span class="who">vs ${esc(g.bot)} <span class="muted">(${g.botRating})${g.rated ? "" : " · casual"}</span></span><span class="tabnum" style="color:${delta >= 0 ? "var(--gold)" : "var(--coral)"};font-weight:600">${delta === 0 ? "—" : (delta > 0 ? "+" : "") + delta}</span></div>`;
+  }).join("");
+  const ladder = RANKS.map((r) => `<span class="${rankIdx(r) <= rankIdx(rank) ? "on" : ""}" title="${r.name}"><svg viewBox="0 0 1 1"><use href="#g-${r.piece}" width="1" height="1"/></svg></span>`).join("");
+  app.innerHTML = `
+  <section class="screen"><div class="scroll">
+    <div class="topline">
+      <div class="wordmark">Dee <b>Chess</b></div><div class="spacer"></div>
+      ${d.streak > 0 ? `<span class="chip" title="Days in a row">🔥 <span class="tabnum">${d.streak}</span></span>` : ""}
+    </div>
+    <div class="card rank-card">
+      ${rankEmblem(rank, Profile.inPlacement ? 0 : progressToNext(d.rating, rank))}
+      <div class="rank-meta">
+        <span class="eyebrow">Your rank</span>
+        <h2>${rank.name}</h2>
+        <span class="rank-rating tabnum">${Profile.inPlacement ? `Placement · ${d.placementLeft} ${d.placementLeft === 1 ? "game" : "games"} left` : `${d.rating} rating`}</span>
+        <span class="muted">${next ? `Next: ${next.name} at ${next.min}` : "Top rank reached"}</span>
+        <div class="ladder" aria-label="Rank ladder">${ladder}</div>
+      </div>
+    </div>
+    <div class="card coach-style">
+      <div class="sage-mark">✦</div>
+      <div><b>Coach: ${style[0]}</b><span class="muted">${style[1]}</span></div>
+    </div>
+    <button class="btn btn-gold" id="play">${Profile.inPlacement ? "Play placement game" : "Play"}</button>
+    ${puzzleCard()}
+    ${statsRow()}
+    <h3 class="section-title">Recent games</h3>
+    ${results || `<div class="empty-note">Your games will show up here. Start with a placement game against Kemi.</div>`}
+  </div></section>`;
+  $("#play").onclick = showOpponents;
+  const pz = $("#puz-go");
+  if (pz) pz.onclick = () => {
+    const due = Profile.duePuzzles();
+    if (due.length) showPuzzles(due, false);
+    else showPuzzles(Profile.openPuzzles().slice(0, 10), true);
+  };
+}
+
+function puzzleCard() {
+  const due = Profile.duePuzzles().length, open = Profile.openPuzzles().length;
+  const mastered = Profile.data.puzzles.length - open;
+  if (!open && !mastered) {
+    return `<div class="card puz-card"><span class="count zero">0</span><div class="txt"><b>Puzzles from your mistakes</b><span class="muted">Every time Sage stops you, that position comes back here the next day for you to solve.</span></div></div>`;
+  }
+  if (due) {
+    return `<div class="card puz-card"><span class="count">${due}</span><div class="txt"><b>${due === 1 ? "Puzzle" : "Puzzles"} due today</b><span class="muted">Positions where you went wrong. Find the move you missed.</span></div><button class="go" id="puz-go">Solve</button></div>`;
+  }
+  return `<div class="card puz-card"><span class="count zero">0</span><div class="txt"><b>All caught up</b><span class="muted">${open ? `${open} coming back over the next days.` : ""} ${mastered ? `${mastered} mastered.` : ""}</span></div>${open ? `<button class="go ghost" id="puz-go">Practise</button>` : ""}</div>`;
+}
+
+function statsRow() {
+  const d = Profile.data;
+  if (!d.history.length && !d.threats.asked) return "";
+  const bpg = Profile.blundersPerGame();
+  const spot = d.threats.asked ? Math.round((100 * d.threats.spotted) / d.threats.asked) + "%" : "—";
+  return `<div class="stats">
+    <div class="stat"><b>${bpg == null ? "—" : bpg.toFixed(1)}</b><span>blunders per game, last 10</span></div>
+    <div class="stat"><b>${spot}</b><span>threats spotted${d.threats.asked ? ` (${d.threats.spotted}/${d.threats.asked})` : ""}</span></div>
+    <div class="stat"><b>${d.puzzles.filter((p) => p.mastered).length}</b><span>mistakes mastered</span></div>
+  </div>`;
+}
+
+function showOpponents() {
+  let rated = true;
+  const draw = () => {
+    const match = Profile.nextOpponent();
+    const card = (b, isMatch, ratedGame) => `<button class="bot ${isMatch ? "match" : ""}" data-id="${b.id}" data-rated="${ratedGame}">
+      <span class="av">${b.name[0]}</span>
+      <span class="info"><span class="nm">${b.name}</span><br><span class="muted">${b.personality}</span>${isMatch ? `<br><span class="tag-match">Your match</span>` : ""}</span>
+      <span class="rt tabnum">${b.rating}</span></button>`;
+    app.innerHTML = `<section class="screen">
+      <div class="bar"><button class="icon-btn" id="back" aria-label="Back">←</button><h2 style="font-size:22px">Choose opponent</h2></div>
+      <div class="scroll" style="padding-top:4px">
+      ${Profile.inPlacement
+        ? `<p class="muted" style="margin:0">First, ${Profile.data.placementLeft} placement ${Profile.data.placementLeft === 1 ? "game" : "games"} to find your level.</p>${card(match, true, true)}`
+        : `<div class="seg" role="group" aria-label="Game type"><button aria-pressed="${rated}" data-seg="1">Rated</button><button aria-pressed="${!rated}" data-seg="0">Casual</button></div>
+           <p class="muted" style="margin:0">${rated ? "Rated games match you with a bot near your rating." : "Casual games never change your rating."}</p>
+           ${rated ? card(match, true, true) : BOTS.map((b) => card(b, b.id === match.id, false)).join("")}`}
+      </div></section>`;
+    $("#back").onclick = showHome;
+    app.querySelectorAll("[data-seg]").forEach((b) => (b.onclick = () => { rated = b.dataset.seg === "1"; draw(); }));
+    app.querySelectorAll(".bot").forEach((b) => (b.onclick = () => startGame(BOTS.find((x) => x.id === b.dataset.id), b.dataset.rated === "true")));
+  };
+  draw();
+}
+
+/* Puzzles from your own mistakes. [practice] = don't change the schedule. */
+function showPuzzles(list, practice) {
+  teardownGame();
+  if (!list.length) { showHome(); return; }
+  let i = 0, solvedFirst = 0, pz, pos, firstTry, done, bestScore, engine = null;
+  app.innerHTML = `<section class="screen game-screen">
+    <div class="gbar"><button class="icon-btn" id="pback" aria-label="Back">←</button><span class="lbl" id="pcount"></span></div>
+    <div class="puz-head"><span class="eyebrow" id="pmeta"></span><h2 id="ptitle"></h2></div>
+    <div class="board-wrap" id="bw"></div>
+    <div class="puz-dock" id="pdock"></div>
+  </section>`;
+  $("#pback").onclick = showHome;
+  Engine.start().then((e) => { engine = e; }).catch(() => {});
+  const board = new BoardView($("#bw"), { onMove: (uci) => onMove(uci) });
+  currentBoard = board;
+  const dock = (html) => { $("#pdock").innerHTML = html; };
+  const grade = () => { if (!practice && pz.id) Profile.gradePuzzle(pz.id, firstTry); if (firstTry) solvedFirst++; };
+  const nextBtn = () => (i + 1 < list.length ? `<button class="btn btn-gold btn-small" id="pnext">Next puzzle</button>` : `<button class="btn btn-gold btn-small" id="pnext">Finish</button>`);
+  const wireNext = () => { $("#pnext").onclick = () => { if (i + 1 < list.length) { i++; load(); } else finish(); }; };
+  function load() {
+    pz = list[i]; pos = new Pos(pz.fen); firstTry = true; done = false; bestScore = null;
+    board.setOrientation(pz.side);
+    board.render(pos, { animate: false, interactive: true, mySide: pz.side });
+    $("#pcount").textContent = `Puzzle ${i + 1} of ${list.length}${practice ? " · practice" : ""}`;
+    $("#pmeta").textContent = `vs ${pz.bot} · ${MT_LABEL[pz.type] || "Mistake"}`;
+    $("#ptitle").textContent = `Find the best move for ${pz.side === "w" ? "White" : "Black"}`;
+    dock(`<div class="verdict info">You went wrong in this position before. What should you have played?</div>`);
+  }
+  async function onMove(uci) {
+    if (done) return;
+    const after = pos.play(uci);
+    sound.move(!!pos.pieceAt(uciTo(uci)));
+    board.render(after, { animate: true, lastMove: uci, interactive: false, mySide: pz.side });
+    let ok = uci.slice(0, 4) === pz.solution.slice(0, 4) || after.isCheckmate;
+    if (!ok && engine) {
+      dock(`<div class="verdict info">Sage is checking your move…</div>`);
+      try {
+        if (!bestScore) { const a = await engine.judge(pos.fen); bestScore = a.lines[0] && a.lines[0].score; }
+        const r = await engine.judge(after.fen);
+        const s = r.lines[0] && r.lines[0].score;
+        if (bestScore && s && judgeMove(bestScore, flipScore(s)) === null) ok = true;
+      } catch (e) {}
+    }
+    const solSan = safeSan(pos, pz.solution);
+    if (ok) {
+      done = true; grade(); buzz(15);
+      const same = uci.slice(0, 4) === pz.solution.slice(0, 4);
+      dock(`<div class="verdict good"><span><b>${firstTry ? "Correct!" : "That's it."}</b> ${same ? "" : `That works too. Sage's choice was ${esc(solSan)}.`}</span><div class="row">${nextBtn()}</div></div>`);
+      wireNext();
+      return;
+    }
+    firstTry = false;
+    buzz([18, 40, 30]);
+    dock(`<div class="verdict bad"><span><b>Not quite.</b> Last time: ${esc(pz.why || "this move lost material.")}</span>
+      <div class="row"><button class="btn btn-line btn-small" id="pagain">Try again</button><button class="btn btn-mint" id="pshow">Show answer</button></div></div>`);
+    $("#pagain").onclick = () => { board.render(pos, { animate: true, interactive: true, mySide: pz.side }); dock(`<div class="verdict info">Try again. Look for checks, captures and threats.</div>`); };
+    $("#pshow").onclick = () => {
+      done = true; grade();
+      board.render(pos, { animate: true, interactive: false, mySide: pz.side, shapes: [{ type: "arrow", from: uciFrom(pz.solution), to: uciTo(pz.solution), color: "#4FD8A4", marker: "mint" }] });
+      dock(`<div class="verdict info"><span>The move was <b>${esc(solSan)}</b>. This one comes back ${practice ? "in your schedule" : "tomorrow"}.</span><div class="row">${nextBtn()}</div></div>`);
+      wireNext();
+    };
+  }
+  function finish() {
+    board.render(pos, { animate: false, interactive: false, mySide: pz.side });
+    dock(`<div class="verdict good"><span><b>Done.</b> ${solvedFirst} of ${list.length} solved on the first try.${practice ? "" : " Solved puzzles come back later to make sure they stick."}</span><div class="row"><button class="btn btn-gold btn-small" id="phome">Home</button></div></div>`);
+    $("#phome").onclick = showHome;
+  }
+  load();
+}
+
+function teardownGame() {
+  if (currentGame) currentGame.alive = false;
+  if (currentBoard) currentBoard.destroy();
+  currentGame = null; currentBoard = null;
+}
+
+async function startGame(bot, rated) {
+  teardownGame();
+  sound.ensure();
+  const you = Profile.data.history.length % 2 === 0 ? "w" : "b";
+  const rank = Profile.rank;
+  app.innerHTML = `<section class="screen game-screen">
+    <div class="gbar">
+      <button class="icon-btn" id="leave" aria-label="Leave game">←</button>
+      <span class="lbl">${rated ? "Rated game" : "Casual game"}</span><div class="spacer"></div>
+      <button class="txt-btn" id="snd" aria-label="Toggle sound">${Profile.data.sound ? "🔊" : "🔇"}</button>
+      <button class="txt-btn" id="resign">⚑ Resign</button>
+    </div>
+    <div class="player"><span class="av">${bot.name[0]}</span><div class="meta"><div class="nm">${bot.name} <span class="muted tabnum" style="font-weight:500">${bot.rating}</span></div><div class="captured" id="cap-top"></div></div><div class="thinking" id="th-bot"><span class="dots"><i></i><i></i><i></i></span>thinking</div></div>
+    <div class="board-wrap" id="bw"><div class="loading" style="position:absolute;inset:0;justify-content:center"><div class="spinner"></div><span>Waking up the engine…</span></div></div>
+    <div class="player"><span class="av">${goldSvg(rank.piece)}</span><div class="meta"><div class="nm">You <span class="muted tabnum" style="font-weight:500">${rank.name} · ${Profile.data.rating}</span></div><div class="captured" id="cap-bot"></div></div><div class="thinking" id="th-you"><span class="dots"><i></i><i></i><i></i></span>checking</div></div>
+    <div class="moves" id="moves"></div>
+    <div class="dock" id="dock"><div class="status">Setting up the board…</div></div>
+  </section>`;
+  $("#leave").onclick = () => confirmLeave();
+  $("#resign").onclick = () => confirmLeave();
+  $("#snd").onclick = (e) => { Profile.data.sound = !Profile.data.sound; Profile.saveLocal(); e.currentTarget.textContent = Profile.data.sound ? "🔊" : "🔇"; };
+
+  let engine;
+  try { engine = await Engine.start(); }
+  catch (e) {
+    $("#bw").innerHTML = `<div class="loading" style="position:absolute;inset:0;justify-content:center"><span style="color:var(--coral);font-weight:700">The engine couldn't start.</span><span>${esc(e.message || e)}. Check your connection, then try again.</span><button class="btn btn-line" id="again" style="width:auto;padding:0 20px">Try again</button></div>`;
+    $("#again").onclick = () => startGame(bot, rated);
+    return;
+  }
+  if (!document.body.contains($("#bw"))) return;
+  const wrap = $("#bw");
+  wrap.innerHTML = "";
+  const board = new BoardView(wrap, {
+    onMove: (uci) => { sound.move(!!game.position.pieceAt(uciTo(uci))); game.playYourMove(uci); },
+    onTap: (sq) => game.answerQuiz(sq),
+  });
+  board.setOrientation(you);
+  const game = new Game({ engine, bot, rank, you, onChange: (g) => renderGame(g, board, bot, rated) });
+  game.onMistake = (p) => Profile.addPuzzle(p);
+  currentGame = game; currentBoard = board;
+  game.rated = rated;
+  board.render(game.position, { animate: false, mySide: you });
+  game.start().catch((e) => toast("Something went wrong: " + (e.message || e)));
+}
+
+function capturedHTML(pos, side) {
+  const start = { p: 8, n: 2, b: 2, r: 2, q: 1 };
+  const have = { p: 0, n: 0, b: 0, r: 0, q: 0 };
+  for (const p of Object.values(pos.pieces())) if (p.side === opp(side) && have[p.kind] != null) have[p.kind]++;
+  let html = "";
+  for (const k of ["q", "r", "b", "n", "p"]) for (let i = 0; i < Math.max(0, start[k] - have[k]); i++) html += pieceSvg(opp(side), k);
+  const adv = balance(pos, side);
+  return html + (adv > 0 ? `<span class="adv">+${adv}</span>` : "");
+}
+
+function renderGame(g, board, bot, rated) {
+  if (g !== currentGame) return;
+  const shown = g.pausedPosition || g.position;
+  const paused = g.phase === "paused";
+  const shapes = [];
+  if (paused && g.report && g.message) {
+    const r = g.report, m = g.message;
+    if (m.showThreat && r.replyUci) shapes.push({ type: "arrow", from: uciFrom(r.replyUci), to: uciTo(r.replyUci), color: "#FF6B5E", marker: "coral" });
+    if (r.square && explainsWhy(g.rank)) shapes.push({ type: "ring", sq: r.square, color: "#FF6B5E" });
+    if (m.showBest && m.better && r.bestUci) shapes.push({ type: "arrow", from: uciFrom(r.bestUci), to: uciTo(r.bestUci), color: "#4FD8A4", marker: "mint" });
+  }
+  if (g.phase === "yourTurn" && g.hint.length) for (const sq of g.hint) shapes.push({ type: "ring", sq, color: "#E8B954" });
+  board.render(shown, {
+    animate: true,
+    lastMove: g.pausedMove || g.lastMove,
+    interactive: g.phase === "yourTurn",
+    mySide: g.you,
+    dim: paused,
+    shapes,
+    tapMode: g.phase === "quiz",
+  });
+  $("#bw").classList.toggle("paused", paused);
+  $("#th-bot").classList.toggle("on", g.phase === "botThinking");
+  $("#th-you").classList.toggle("on", g.phase === "judging");
+  $("#cap-top").innerHTML = capturedHTML(shown, opp(g.you));
+  $("#cap-bot").innerHTML = capturedHTML(shown, g.you);
+
+  const mv = $("#moves");
+  let mh = "";
+  for (let i = 0; i < g.sans.length; i += 2) {
+    const f = (j) => (g.sans[j] ? `${esc(g.sans[j])}${g.flags[j] ? `<span class="flag">${g.flags[j]}</span>` : ""}` : "");
+    mh += `<span><span class="n">${i / 2 + 1}.</span> ${f(i)} ${f(i + 1)}</span>`;
+  }
+  mv.innerHTML = mh;
+  mv.scrollLeft = mv.scrollWidth;
+
+  const dock = $("#dock");
+  if (paused && g.message) {
+    const m = g.message;
+    const key = g.attempt + ":" + g.sans.length;
+    if (dock.dataset.key !== key) {
+      dock.dataset.key = key;
+      dock.innerHTML = `<div class="coach" role="alert">
+        <div class="who">✦ Sage</div>
+        <div class="cline wrong"><span class="ic">✕</span><span>${esc(m.wrong)}</span></div>
+        ${m.why ? `<div class="cline why"><span class="ic">!</span><span>${esc(m.why)}</span></div>` : ""}
+        ${m.better ? `<div class="cline better"><span class="ic">✓</span><span>${esc(m.better)}</span></div>` : ""}
+        <div class="actions">
+          <button class="btn btn-gold btn-small" id="retry">Try again</button>
+          ${givesBetterMove(g.rank) && g.report.bestSan ? `<button class="btn btn-mint" id="better">Play ${esc(g.report.bestSan)}</button>` : ""}
+        </div></div>`;
+      $("#retry").onclick = () => g.retry();
+      const bb = $("#better");
+      if (bb) bb.onclick = () => g.playBetter();
+    }
+  } else if (g.phase === "quiz" && g.quiz) {
+    const key = "quiz:" + g.sans.length + ":" + g.quiz.attempts;
+    if (dock.dataset.key !== key) {
+      dock.dataset.key = key;
+      dock.innerHTML = `<div class="coach quiz" role="alert">
+        <div class="who">✦ Sage asks</div>
+        <div class="cline ask"><span class="ic">?</span><span><b>What is ${esc(bot.name)} threatening?</b> Tap the piece of yours that's in danger.</span></div>
+        ${g.note ? `<div class="cline why"><span class="ic">!</span><span>${esc(g.note.text)}</span></div>` : ""}
+        <div class="actions"><button class="btn btn-line btn-small" id="reveal">I'm not sure, show me</button></div>
+      </div>`;
+      $("#reveal").onclick = () => g.revealQuiz();
+    }
+  } else {
+    dock.dataset.key = "";
+    const text = { starting: "Setting up the board…", yourTurn: g.position.isCheck ? "You're in check. Your move." : "Your move", judging: "Sage is checking your move…", botThinking: `${bot.name} is thinking…`, over: "Game over" }[g.phase] || "";
+    const note = g.phase === "yourTurn" && g.note ? `<div class="note ${g.note.tone}">${g.note.tone === "good" ? "✓" : "✦"} ${esc(g.note.text)}</div>` : "";
+    dock.innerHTML = `${note}<div class="status">${text}</div>`;
+  }
+  if (g.phase === "over" && !g.recorded) { g.recorded = true; finishGame(g, bot, rated); }
+}
+
+async function finishGame(g, bot, rated) {
+  const outcome = Profile.record({ bot, result: g.result, rated, mistakes: g.mistakes, preCoachBlunders: g.preCoachBlunders, sans: g.sans.slice(0, 300) });
+  await sleep(750);
+  if (g !== currentGame) return;
+  if (rated && rankIdx(outcome.rankAfter) > rankIdx(outcome.rankBefore)) await showRankUp(outcome.rankBefore, outcome.rankAfter);
+  showResult(g, bot, rated, outcome);
+}
+
+function showResult(g, bot, rated, o) {
+  const [title, color] = {
+    youMated: ["You won!", "var(--gold)"], botMated: [`Checkmate. ${bot.name} wins.`, "var(--coral)"], resigned: ["You resigned.", "var(--coral)"],
+    stalemate: ["Draw by stalemate.", "var(--quiet)"], insufficient: ["Draw. Not enough pieces to mate.", "var(--quiet)"],
+    repetition: ["Draw by repetition.", "var(--quiet)"], fiftyMoves: ["Draw by the 50-move rule.", "var(--quiet)"],
+  }[g.end] || ["Game over", "var(--text)"];
+  const delta = o.after - o.before;
+  const types = [...new Set(g.mistakes)].map((t) => MT_LABEL[t]).slice(0, 3);
+  const scrim = document.createElement("div");
+  scrim.className = "scrim";
+  scrim.innerHTML = `<div class="sheet" role="dialog" aria-label="Game result">
+    <h2 style="color:${color}">${title}</h2>
+    ${rated ? `<div class="delta tabnum" id="cnt" style="color:${delta >= 0 ? "var(--gold)" : "var(--coral)"}">${o.before}</div>` : `<div class="muted">Casual game. Rating unchanged.</div>`}
+    <div class="muted">${g.mistakes.length ? `Sage stepped in ${g.mistakes.length} ${g.mistakes.length === 1 ? "time" : "times"}${types.length ? ": " + types.join(", ").toLowerCase() : ""}.` : "Sage didn't need to stop you once. Clean game!"}</div>
+    ${g.puzzles.length ? `<button class="btn btn-mint" id="fix" style="margin-top:10px">Fix ${g.puzzles.length === 1 ? "this mistake" : `these ${g.puzzles.length} mistakes`} now</button>` : ""}
+    <button class="btn btn-gold" id="again" style="margin-top:${g.puzzles.length ? 0 : 10}px">Play again</button>
+    <button class="btn btn-line" id="home">Home</button>
+  </div>`;
+  document.body.appendChild(scrim);
+  if (rated) {
+    const el = $("#cnt", scrim), t0 = performance.now();
+    const tick = (t) => {
+      const k = Math.min(1, (t - t0) / 1100), e = 1 - Math.pow(1 - k, 3);
+      el.textContent = `${Math.round(o.before + (o.after - o.before) * e)}  ${delta >= 0 ? "+" : ""}${delta}`;
+      if (k < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
+  $("#again", scrim).onclick = () => { scrim.remove(); startGame(rated ? Profile.nextOpponent() : bot, rated); };
+  $("#home", scrim).onclick = () => { scrim.remove(); showHome(); };
+  const fix = $("#fix", scrim);
+  if (fix) fix.onclick = () => { scrim.remove(); showPuzzles(g.puzzles.map((p) => Object.assign({}, p, { id: null })), true); };
+}
+
+function confirmLeave() {
+  const g = currentGame;
+  if (!g || g.phase === "over") { showHome(); return; }
+  const scrim = document.createElement("div");
+  scrim.className = "scrim center";
+  scrim.innerHTML = `<div class="dialog" role="dialog" aria-label="Leave game">
+    <h3>Resign this game?</h3>
+    <p class="muted" style="margin:0">${g.rated ? "Resigning counts as a rated loss." : "This casual game will end."}</p>
+    <div class="row"><button class="btn btn-line btn-small" id="keep">Keep playing</button><button class="btn btn-danger btn-small" id="go">Resign</button></div>
+  </div>`;
+  document.body.appendChild(scrim);
+  $("#keep", scrim).onclick = () => scrim.remove();
+  scrim.addEventListener("click", (e) => { if (e.target === scrim) scrim.remove(); });
+  $("#go", scrim).onclick = () => { scrim.remove(); g.resign(); };
+}
+
+function showRankUp(from, to) {
+  return new Promise((resolve) => {
+    const div = document.createElement("div");
+    div.className = "rankup";
+    div.innerHTML = `<canvas></canvas>
+      <div class="morph"><div class="from">${rankEmblem(from, 1, 180)}</div><div class="to">${rankEmblem(to, 1, 180)}</div></div>
+      <div class="new"><span class="eyebrow">New rank</span><h2>${to.name}</h2><p style="margin:0;font-size:17px">${esc(to.tagline)}</p></div>
+      <button class="btn btn-gold cont">Continue</button>`;
+    document.body.appendChild(div);
+    buzz([30, 60, 60]);
+    const canvas = $("canvas", div), ctx = canvas.getContext("2d");
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const resize = () => { canvas.width = canvas.clientWidth * dpr; canvas.height = canvas.clientHeight * dpr; };
+    resize();
+    const parts = Array.from({ length: 70 }, () => ({ x: 0.5 + (Math.random() - 0.5) * 0.5, y: 0.42, vx: (Math.random() - 0.5) * 0.006, vy: -0.004 - Math.random() * 0.008, r: 1 + Math.random() * 2.6, life: 0.6 + Math.random() * 0.6 }));
+    let t0 = null, raf;
+    const frame = (t) => {
+      if (t0 == null) t0 = t;
+      const s = (t - t0) / 1000;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (s > 0.6) for (const p of parts) {
+        const k = Math.min(1, (s - 0.6) / (2.4 * p.life));
+        if (k >= 1) continue;
+        const x = (p.x + p.vx * (s - 0.6) * 60) * canvas.width, y = (p.y + p.vy * (s - 0.6) * 60 + 0.002 * Math.pow((s - 0.6) * 4, 2)) * canvas.height;
+        ctx.globalAlpha = 1 - k;
+        ctx.fillStyle = "#E8B954";
+        ctx.beginPath(); ctx.arc(x, y, p.r * dpr, 0, Math.PI * 2); ctx.fill();
+      }
+      if (s < 4.5) raf = requestAnimationFrame(frame);
+    };
+    raf = requestAnimationFrame(frame);
+    requestAnimationFrame(() => requestAnimationFrame(() => { $(".morph", div).classList.add("go"); div.classList.add("show"); }));
+    $(".cont", div).onclick = () => { cancelAnimationFrame(raf); div.remove(); resolve(); };
+  });
+}
+
+function toast(msg) {
+  const t = document.createElement("div");
+  t.className = "toast"; t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3500);
+}
+
+/* ---------------- Boot ---------------- */
+(function boot() {
+  if (typeof window.Chess !== "function") {
+    app.innerHTML = `<div class="loading" style="height:100%;justify-content:center"><span style="color:var(--coral);font-weight:700">Couldn't load the chess rules.</span><span>Check your internet connection and reopen the page.</span></div>`;
+    return;
+  }
+  Profile.loadLocal();
+  showHome();
+  Profile.connect(() => { if (!currentGame) showHome(); });
+  Engine.start().catch(() => {}); // warm up the engine while you look at the home screen
+})();
+</script>
+
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => { navigator.serviceWorker.register("sw.js").catch(() => {}); });
+}
+</script>
+</body>
+</html>
