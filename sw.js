@@ -1,6 +1,6 @@
 // Dee Chess service worker: keeps the app, the chess rules and the engine on
 // the phone so the app works with no internet after the first visit.
-const CACHE = "dee-chess-v2";
+const CACHE = "dee-chess-v3";
 const CORE = [
   "./",
   "./index.html",

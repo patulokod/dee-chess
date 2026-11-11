@@ -174,15 +174,34 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 600; margin: 0; text
 .overlay .ring { animation: pulse 1.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
 @keyframes pulse { 0%, 100% { opacity: 0.95; } 50% { opacity: 0.45; } }
 
-.promo { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(12, 16, 25, 0.55); z-index: 8; border-radius: 12px; }
-.promo .row { display: flex; gap: 8px; padding: 10px; background: var(--ink-raised); border: 1px solid var(--line); border-radius: 18px; }
-.promo button { width: 62px; height: 62px; border-radius: 12px; background: var(--slate); }
-.promo button svg { width: 100%; height: 100%; }
+.promo { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(12, 16, 25, 0.6); z-index: 8; border-radius: 12px; touch-action: manipulation; }
+.promo-box { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 14px; background: var(--ink-raised); border: 1px solid rgba(232, 185, 84, 0.45); border-radius: 20px; box-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.7); }
+.promo .row { display: flex; gap: 8px; }
+.promo .row button { width: 64px; height: 64px; border-radius: 14px; background: var(--slate); }
+.promo .row button:active { background: rgba(232, 185, 84, 0.25); }
+.promo .row button svg { width: 100%; height: 100%; }
+.promo-cancel { color: var(--quiet); font-size: 14px; padding: 6px 14px; border-radius: 10px; }
 
 .moves { display: flex; gap: 14px; overflow-x: auto; white-space: nowrap; padding: 4px 2px; scrollbar-width: none; font-size: 14px; font-weight: 500; min-height: 30px; }
 .moves::-webkit-scrollbar { display: none; }
 .moves .n { color: var(--quiet); }
-.moves .flag { color: var(--coral); font-weight: 700; }
+.moves .flag { font-weight: 800; margin-left: 1px; }
+.moves .flag.smart { color: var(--gold); }
+.moves .flag.good { color: var(--mint); }
+.moves .flag.fine { color: var(--quiet); }
+.moves .flag.bad { color: var(--coral); }
+
+.feed { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; margin-top: 4px; border-radius: 16px; background: var(--ink-raised); border: 1px solid var(--line); animation: fadeIn 0.25s ease both; }
+.fl { display: flex; gap: 8px; align-items: baseline; font-size: 14px; line-height: 1.4; min-width: 0; }
+.fl > span:last-child { min-width: 0; }
+.verdict-chip, .who-chip { flex: none; font-size: 11.5px; font-weight: 700; padding: 2px 8px; border-radius: 99px; letter-spacing: 0.02em; }
+.verdict-chip.smart { background: rgba(232, 185, 84, 0.18); color: var(--gold); }
+.verdict-chip.good { background: rgba(79, 216, 164, 0.15); color: var(--mint); }
+.verdict-chip.fine { background: var(--slate); color: var(--quiet); }
+.verdict-chip.bad { background: rgba(255, 107, 94, 0.15); color: var(--coral); }
+.who-chip { background: var(--slate); color: var(--quiet); }
+.fl.botline { color: var(--quiet); }
+.fl.botline b { color: var(--text); }
 
 .dock { flex: 1; min-height: 140px; display: flex; flex-direction: column; justify-content: flex-start; }
 .status { margin: auto 0; text-align: center; color: var(--quiet); font-size: 15px; }
@@ -750,6 +769,81 @@ function withReason(before, r) {
   return r;
 }
 
+/* ---------------- Live commentary (never stops the game) ---------------- */
+/* What a move does, in plain words, from the mover's side. [me] is "your"
+   for Dee, or the bot's name. Returns null if nothing stands out. */
+function describeMove(before, uci, after, owner) {
+  const mover = before.turn, other = opp(mover);
+  const from = uciFrom(uci), to = uciTo(uci);
+  const piece = before.pieceAt(from);
+  if (!piece) return null;
+  const captured = before.pieceAt(to);
+  const yours = owner === "your";
+  const poss = yours ? "your" : "their";
+  if (after.isCheckmate) return "Checkmate!";
+  if (uci.length === 5) return `promotes to a ${NOUN[uci[4]] || "queen"}`;
+  if (piece.kind === "k" && Math.abs(fileOf(to) - fileOf(from)) === 2) return `castles. The king is safe and the rook joins the game`;
+  if (before.isCheck) return captured ? `gets out of check by taking the ${NOUN[captured.kind]}` : "gets out of check";
+  if (captured) {
+    const recapturable = after.attackers(to, other).length > 0;
+    if (!recapturable) return `wins a ${NOUN[captured.kind]} for free`;
+    if (VALUE[captured.kind] > VALUE[piece.kind]) return `wins material: ${NOUN[piece.kind]} takes ${NOUN[captured.kind]}`;
+    return `trades ${NOUN[piece.kind]} for ${NOUN[captured.kind]}`;
+  }
+  const dangerBefore = threatenedSquares(before, mover);
+  if (dangerBefore.includes(from) && !threatenedSquares(after, mover).includes(to)) return `moves ${poss} ${NOUN[piece.kind]} out of danger`;
+  const stillThere = dangerBefore.filter((sq) => sq !== from && !threatenedSquares(after, mover).includes(sq));
+  if (stillThere.length) return `protects ${poss} ${NOUN[before.pieceAt(stillThere[0]).kind]} on ${stillThere[0]}`;
+  if (after.isCheck) return "gives check";
+  const newTargets = threatenedSquares(after, other).filter((sq) => !threatenedSquares(before, other).includes(sq));
+  if (newTargets.length >= 2) return `attacks two pieces at once (${newTargets.map((s) => NOUN[after.pieceAt(s).kind]).join(" and ")})`;
+  if (newTargets.length === 1) return `attacks the ${NOUN[after.pieceAt(newTargets[0]).kind]} on ${newTargets[0]}`;
+  const home = mover === "w" ? 0 : 7;
+  if ((piece.kind === "n" || piece.kind === "b") && rankOf(from) === home && before.fullmoves <= 12) return `develops ${poss} ${NOUN[piece.kind]}`;
+  if (piece.kind === "p" && (fileOf(from) === 3 || fileOf(from) === 4) && before.fullmoves <= 10) return "claims space in the centre";
+  if (piece.kind === "q" && before.fullmoves <= 6) return "brings the queen out early";
+  return null;
+}
+
+/* Rates a move Dee played (that the coach didn't stop). */
+function rateMove({ before, uci, after, bestLine, replyLine, rank, oppName }) {
+  const legalCount = before.legal().length;
+  const idea = describeMove(before, uci, after, "your");
+  const isBest = bestLine && bestLine.moves[0] && bestLine.moves[0].slice(0, 4) === uci.slice(0, 4);
+  const afterScore = replyLine ? flipScore(replyLine.score) : after.isCheckmate ? { mate: 1 } : { cp: 0 };
+  const drop = bestLine ? winChance(bestLine.score) - winChance(afterScore) : 0;
+  const sev = bestLine ? judgeMove(bestLine.score, afterScore) : null;
+  const bestSan = bestLine && bestLine.moves[0] ? safeSan(before, bestLine.moves[0]) : null;
+  const say = (label, tone, symbol, text) => ({ label, tone, symbol, text: rank.depth === "wrong" ? "" : text });
+  const tail = (s) => (s ? cap(s) + "." : "");
+
+  if (after.isCheckmate) return say("Checkmate!", "smart", "#", "You won with a checkmate. Well played.");
+  if (legalCount === 1) return say("Only move", "fine", "", "It was the only legal move.");
+
+  if (isBest) {
+    // "Smart": the best move that also wins material, sets up mate, or
+    // leaves a piece hanging on purpose and still keeps the advantage.
+    const bb = playLine(before, bestLine.moves, 6);
+    const gain = bb.length ? balance(bb[bb.length - 1], before.turn) - balance(before, before.turn) : 0;
+    const mates = bestLine.score.mate != null && bestLine.score.mate > 0;
+    const sacrifice = threatenedSquares(after, before.turn).includes(uciTo(uci)) && !before.pieceAt(uciTo(uci));
+    if (mates) return say("Smart move!", "smart", "!!", `${tail(idea)} It starts a forced checkmate.`.trim());
+    if (gain >= 2) return say("Smart move!", "smart", "!!", `${tail(idea)} It wins ${gain} points of material in the end.`.trim());
+    if (sacrifice && winChance(afterScore) >= 50) return say("Smart move!", "smart", "!!", "It looks like it hangs a piece, but taking it is a trap. Sage approves.");
+    return say("Best move", "good", "!", tail(idea) || "It's exactly what Sage would play.");
+  }
+  if (!sev && drop < 3) return say("Good move", "good", "", tail(idea) || "A solid, useful move.");
+  if (!sev) {
+    const better = givesBetterMove(rank) && bestSan ? ` ${bestSan} was a little stronger.` : "";
+    return say("Okay", "fine", "", `${tail(idea) || "Playable."}${better}`.trim());
+  }
+  // Bad but not stopped (the coach only stops some mistakes at your rank).
+  const r = detectMistake({ before, move: uci, after, severity: sev, bestLine, replyLine: replyLine || { moves: [], score: { cp: 0 } } });
+  const better = givesBetterMove(rank) && bestSan ? ` Better was ${bestSan}.` : "";
+  const label = { inaccuracy: "Inaccuracy", mistake: "Mistake", blunder: "Blunder" }[sev];
+  return say(label, "bad", SEV_SYMBOL[sev], `${whyLine(r, oppName)}${better}`);
+}
+
 /* ---------------- The coach's words ---------------- */
 function whyLine(r, oppName) {
   const p = r.piece ? NOUN[r.piece] : "piece", p2 = r.piece2 ? NOUN[r.piece2] : "piece";
@@ -769,7 +863,12 @@ function whyLine(r, oppName) {
     case "kingInCentre": return `Your king is still in the centre with open lines. ${oppName} can go after it with ${reply}.`;
     case "weakenedShelter": return `That pawn move opens a path to your king. ${oppName} can use it with ${reply}.`;
     case "stalemate": return `Careful, that's stalemate! ${oppName} has no legal moves, so the game is a draw even though you were winning.`;
-    default: return lost >= 1 ? `After ${reply}, ${oppName} comes out about ${lost} ${lost === 1 ? "point" : "points"} ahead.` : `This gives ${oppName} a much better position after ${reply}.`;
+    default: {
+      if (lost >= 1) return `After ${reply}, ${oppName} comes out about ${lost} ${lost === 1 ? "point" : "points"} ahead.`;
+      if (r.severity === "inaccuracy") return `This lets ${oppName} improve their position with ${reply}.`;
+      if (r.severity === "mistake") return `This gives ${oppName} a clearly better position after ${reply}.`;
+      return `This gives ${oppName} a much better position after ${reply}.`;
+    }
   }
 }
 function coachSays(r, rank, oppName, attempt) {
@@ -798,7 +897,7 @@ const Profile = {
   uid: null,
   saving: false,
   dirty: false,
-  fresh() { return { rating: STARTING_RATING, rankId: "initiate", games: 0, placementLeft: PLACEMENT_BOTS.length, streak: 0, lastPlayed: null, history: [], puzzles: [], threats: { asked: 0, spotted: 0 }, sound: true, updatedAt: 0 }; },
+  fresh() { return { rating: STARTING_RATING, rankId: "initiate", games: 0, placementLeft: PLACEMENT_BOTS.length, streak: 0, lastPlayed: null, history: [], puzzles: [], threats: { asked: 0, spotted: 0 }, sound: true, commentary: true, updatedAt: 0 }; },
   /* Puzzles from your own mistakes, brought back after 1, 3 and 7 days. */
   addPuzzle(p) {
     const d = this.data;
@@ -921,6 +1020,8 @@ class Game {
     this.note = null;       // { text, tone } shown after a quiz
     this.hint = [];         // squares ringed after a quiz answer
     this.lastQuizPly = -99;
+    this.comment = null;    // live verdict on Dee's last move
+    this.botComment = null; // what the bot's last move does
     this.remember(this.position);
   }
   emit() { if (this.alive) this.onChange(this); }
@@ -970,7 +1071,12 @@ class Game {
       return;
     }
     if (this.attempt === 1 && severity === "blunder") this.preCoachBlunders++;
-    this.commit(before, uci, after, this.attempt > 1 ? "?" : null);
+    let c = null;
+    try { c = rateMove({ before, uci, after, bestLine, replyLine, rank: this.rank, oppName: this.bot.name }); } catch (e) { c = null; }
+    const san = before.san(uci);
+    this.comment = c ? Object.assign({ san }, c) : null;
+    this.botComment = null;
+    this.commit(before, uci, after, c ? c.symbol || null : null, c ? c.tone : null);
     if (this.checkEnd()) return;
     await this.botMove();
   }
@@ -985,6 +1091,9 @@ class Game {
     if (this.phase !== "paused" || !best || !givesBetterMove(this.rank)) return;
     this.retry();
     const before = this.position, after = before.play(best);
+    const idea = describeMove(before, best, after, "your");
+    this.comment = { san: before.san(best), label: "Sage's move", tone: "good", symbol: "", text: idea ? cap(idea) + "." : "You played the coach's suggestion." };
+    this.botComment = null;
     this.commit(before, best, after);
     if (this.checkEnd()) return;
     await this.botMove();
@@ -1002,6 +1111,9 @@ class Game {
     if (wait > 0) await sleep(wait);
     if (!this.alive || this.phase === "over" || !move) return;
     const before = this.position, after = before.play(move);
+    let idea = null;
+    try { idea = describeMove(before, move, after, this.bot.name); } catch (e) {}
+    this.botComment = { san: before.san(move), text: idea };
     this.commit(before, move, after);
     sound.move(!!before.pieceAt(uciTo(move)));
     if (this.checkEnd()) return;
@@ -1053,9 +1165,9 @@ class Game {
     this.endQuiz();
   }
   endQuiz() { this.quiz = null; this.phase = "yourTurn"; this.emit(); }
-  commit(before, uci, after, flag = null) {
+  commit(before, uci, after, flag = null, tone = null) {
     this.sans.push(before.san(uci));
-    this.flags.push(flag);
+    this.flags.push(flag ? { s: flag, tone } : null);
     this.position = after;
     this.lastMove = uci;
     this.pausedMove = null; this.pausedPosition = null;
@@ -1282,20 +1394,40 @@ class BoardView {
     const moves = (this.legalMap.get(from) || []).filter((m) => m.to === to);
     if (!moves.length) return;
     this.sel = null;
-    if (moves.some((m) => m.promotion)) { this.askPromotion(from, to, dropped); return; }
+    if (moves.some((m) => m.promotion)) {
+      const el = this.els.get(from);
+      if (el && !dropped) { el.classList.add("anim"); this.place(el, to); }
+      this.askPromotion(from, to);
+      return;
+    }
     this.onMove(from + to);
   }
-  askPromotion(from, to, dropped) {
+  askPromotion(from, to) {
+    // On phones, the same tap that reaches the last rank also fires a click
+    // on whatever appears under the finger, so only the piece buttons and the
+    // cancel button act, and only after a short delay.
     const side = this.mySide;
+    const opened = performance.now();
     const div = document.createElement("div");
     div.className = "promo";
-    div.innerHTML = `<div class="row">${["q", "r", "b", "n"].map((k) => `<button data-k="${k}" aria-label="Promote to ${NOUN[k]}">${pieceSvg(side, k)}</button>`).join("")}</div>`;
-    div.addEventListener("click", (e) => {
-      const b = e.target.closest("button");
+    div.innerHTML = `<div class="promo-box"><span class="eyebrow">Promote your pawn to</span><div class="row">${["q", "r", "b", "n"].map((k) => `<button data-k="${k}" aria-label="Promote to ${NOUN[k]}">${pieceSvg(side, k)}</button>`).join("")}</div><button class="promo-cancel" data-cancel="1">Cancel</button></div>`;
+    const cancel = () => {
       div.remove();
-      if (!b) { const el = this.els.get(from); if (el) { el.classList.add("anim"); this.place(el, from); } this.drawHighlights(); return; }
+      const el = this.els.get(from);
+      if (el) { el.classList.add("anim"); this.place(el, from); }
+      this.promoOpen = false;
+      this.drawHighlights();
+    };
+    div.addEventListener("click", (e) => {
+      if (performance.now() - opened < 350) return;
+      const b = e.target.closest("button");
+      if (!b) return;
+      if (b.dataset.cancel) { cancel(); return; }
+      div.remove();
+      this.promoOpen = false;
       this.onMove(from + to + b.dataset.k);
     });
+    this.promoOpen = true;
     this.wrap.appendChild(div);
   }
 }
@@ -1498,6 +1630,7 @@ async function startGame(bot, rated) {
     <div class="gbar">
       <button class="icon-btn" id="leave" aria-label="Leave game">←</button>
       <span class="lbl">${rated ? "Rated game" : "Casual game"}</span><div class="spacer"></div>
+      <button class="txt-btn" id="cmt" aria-label="Toggle live commentary" aria-pressed="${Profile.data.commentary}">${Profile.data.commentary ? "💬 On" : "💬 Off"}</button>
       <button class="txt-btn" id="snd" aria-label="Toggle sound">${Profile.data.sound ? "🔊" : "🔇"}</button>
       <button class="txt-btn" id="resign">⚑ Resign</button>
     </div>
@@ -1509,6 +1642,12 @@ async function startGame(bot, rated) {
   </section>`;
   $("#leave").onclick = () => confirmLeave();
   $("#resign").onclick = () => confirmLeave();
+  $("#cmt").onclick = (e) => {
+    Profile.data.commentary = !Profile.data.commentary; Profile.saveLocal();
+    e.currentTarget.textContent = Profile.data.commentary ? "💬 On" : "💬 Off";
+    e.currentTarget.setAttribute("aria-pressed", Profile.data.commentary);
+    if (currentGame && currentBoard) renderGame(currentGame, currentBoard, bot, rated);
+  };
   $("#snd").onclick = (e) => { Profile.data.sound = !Profile.data.sound; Profile.saveLocal(); e.currentTarget.textContent = Profile.data.sound ? "🔊" : "🔇"; };
 
   let engine;
@@ -1574,7 +1713,7 @@ function renderGame(g, board, bot, rated) {
   const mv = $("#moves");
   let mh = "";
   for (let i = 0; i < g.sans.length; i += 2) {
-    const f = (j) => (g.sans[j] ? `${esc(g.sans[j])}${g.flags[j] ? `<span class="flag">${g.flags[j]}</span>` : ""}` : "");
+    const f = (j) => (g.sans[j] ? `${esc(g.sans[j])}${g.flags[j] ? `<span class="flag ${g.flags[j].tone || "bad"}">${esc(g.flags[j].s)}</span>` : ""}` : "");
     mh += `<span><span class="n">${i / 2 + 1}.</span> ${f(i)} ${f(i + 1)}</span>`;
   }
   mv.innerHTML = mh;
@@ -1615,7 +1754,15 @@ function renderGame(g, board, bot, rated) {
     dock.dataset.key = "";
     const text = { starting: "Setting up the board…", yourTurn: g.position.isCheck ? "You're in check. Your move." : "Your move", judging: "Sage is checking your move…", botThinking: `${bot.name} is thinking…`, over: "Game over" }[g.phase] || "";
     const note = g.phase === "yourTurn" && g.note ? `<div class="note ${g.note.tone}">${g.note.tone === "good" ? "✓" : "✦"} ${esc(g.note.text)}</div>` : "";
-    dock.innerHTML = `${note}<div class="status">${text}</div>`;
+    let feed = "";
+    if (Profile.data.commentary && g.phase !== "starting" && g.phase !== "over" && (g.comment || g.botComment)) {
+      const c = g.comment, bc = g.botComment;
+      feed = `<div class="feed">
+        ${c ? `<div class="fl"><span class="verdict-chip ${c.tone}">${esc(c.label)}</span><span><b>${esc(c.san)}</b>${c.text ? " · " + esc(c.text) : ""}</span></div>` : ""}
+        ${bc ? `<div class="fl botline"><span class="who-chip">${esc(bot.name)}</span><span><b>${esc(bc.san)}</b>${bc.text ? " · " + esc(cap(bc.text)) + (bc.text.endsWith("!") ? "" : ".") : ""}</span></div>` : ""}
+      </div>`;
+    }
+    dock.innerHTML = `${note}${feed}<div class="status">${text}</div>`;
   }
   if (g.phase === "over" && !g.recorded) { g.recorded = true; finishGame(g, bot, rated); }
 }
