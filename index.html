@@ -415,7 +415,7 @@ function workerIO(fromFile) {
       if (line.includes("uciok")) {
         clearTimeout(timer);
         w.onmessage = (ev) => handler(String(ev.data));
-        resolve({ post: (m) => w.postMessage(m), setHandler: (f) => { handler = f; } });
+        resolve({ post: (m) => w.postMessage(m), setHandler: (f) => { handler = f; }, terminate: () => w.terminate() });
       }
     };
     w.postMessage("uci");
@@ -485,6 +485,9 @@ class Engine {
     });
   }
   search({ fen, movetime, depth, multipv = 1, skill = 20 }) {
+    // A position with no legal moves (mate or stalemate) has nothing to
+    // search; some engine builds never answer there, so don't ask.
+    try { if (new Chess(fen).moves().length === 0) return Promise.resolve({ lines: [], best: null }); } catch (e) {}
     const run = async () => {
       this.io.post("setoption name MultiPV value " + multipv);
       this.io.post("setoption name Skill Level value " + skill);
@@ -492,10 +495,22 @@ class Engine {
       return new Promise((done) => {
         const s = { lines: new Map(), done };
         this.cur = s;
-        const guard = setTimeout(() => {
-          if (this.cur === s) { this.io.post("stop"); }
-        }, (movetime || 3000) + 6000);
-        s.done = (res) => { clearTimeout(guard); done(res); };
+        const budget = depth ? 6000 : (movetime || 500) + 3500;
+        let hard = null;
+        const finish = (res) => { clearTimeout(soft); clearTimeout(hard); if (this.cur === s) this.cur = null; done(res); };
+        // Soft limit: ask the engine to stop. Hard limit: stop waiting, use
+        // what we have, and restart the engine so the game can't freeze.
+        const soft = setTimeout(() => {
+          if (this.cur !== s) return;
+          this.io.post("stop");
+          hard = setTimeout(() => {
+            if (this.cur !== s) return;
+            const lines = [...s.lines.values()].sort((a, b) => a.multipv - b.multipv);
+            finish({ lines, best: lines[0] ? lines[0].moves[0] : null });
+            this._restart();
+          }, 2500);
+        }, budget);
+        s.done = finish;
         this.io.post("position fen " + fen);
         this.io.post(depth ? "go depth " + depth : "go movetime " + (movetime || 500));
       });
@@ -503,6 +518,17 @@ class Engine {
     const p = this.q.then(run);
     this.q = p.catch(() => {});
     return p;
+  }
+  _restart() {
+    // Swap in a fresh engine; searches queued meanwhile wait for it.
+    this.q = this.q.then(async () => {
+      try { if (this.io.terminate) this.io.terminate(); } catch (e) {}
+      try {
+        const io = await workerIO(true).catch(() => workerIO(false)).catch(() => mainThreadIO());
+        this.io = io;
+        io.setHandler((raw) => this._onLine(raw));
+      } catch (e) { /* keep the old one */ }
+    });
   }
   judge(fen) { return this.search({ fen, movetime: 650, multipv: 1, skill: 20 }); }
   newGame() { this.io.post("ucinewgame"); }
@@ -1043,7 +1069,8 @@ class Game {
     this.emit();
     if (after.isCheckmate) { this.commit(before, uci, after); return this.finish("youMated"); }
 
-    const reply = await this.engine.judge(after.fen);
+    // Stalemate needs no engine either: judge it against the best line.
+    const reply = after.isStalemate ? { lines: [], best: null } : await this.engine.judge(after.fen);
     if (!this.alive) return;
     const replyLine = reply.lines[0] || null;
     const bestLine = this.bestLine;
